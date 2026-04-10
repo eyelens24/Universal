@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Heliocentric Spacecraft Model</title>
+  <style>
+    :root {
+      --bg: #08111f;
+      --panel: rgba(10, 18, 34, 0.88);
+      --panel-border: rgba(140, 176, 255, 0.18);
+      --text: #eef4ff;
+      --muted: #9eafc9;
+      --accent: #7bdff6;
+      --accent-2: #ffd166;
+      --grid: rgba(120, 155, 220, 0.16);
+      --axis: rgba(255, 255, 255, 0.38);
+      --shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
+      --font-heading: "Avenir Next", "Segoe UI", sans-serif;
+      --font-body: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font-body);
+      color: var(--text);
+      background:
+        radial-gradient(circle at top, rgba(61, 102, 203, 0.28), transparent 30%),
+        radial-gradient(circle at 20% 20%, rgba(255, 209, 102, 0.08), transparent 22%),
+        linear-gradient(180deg, #091220 0%, #050a13 100%);
+    }
+
+    .shell {
+      width: min(1280px, calc(100vw - 32px));
+      margin: 24px auto;
+      display: grid;
+      gap: 18px;
+    }
+
+    .hero,
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .hero {
+      padding: 24px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-family: var(--font-heading);
+      font-size: clamp(1.8rem, 4vw, 3rem);
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+    }
+
+    .hero p,
+    .caption,
+    .hint,
+    .metric span {
+      color: var(--muted);
+    }
+
+    .hero p,
+    .caption {
+      margin: 0;
+      max-width: 72ch;
+      line-height: 1.55;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(280px, 360px) 1fr;
+      gap: 18px;
+    }
+
+    .panel {
+      padding: 18px;
+    }
+
+    .controls {
+      display: grid;
+      gap: 18px;
+      align-content: start;
+    }
+
+    .section {
+      display: grid;
+      gap: 10px;
+    }
+
+    .section h2 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    label {
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    input,
+    select {
+      width: 100%;
+      border: 1px solid rgba(140, 176, 255, 0.2);
+      border-radius: 12px;
+      background: rgba(4, 10, 20, 0.72);
+      color: var(--text);
+      padding: 11px 12px;
+      font: inherit;
+    }
+
+    input[type="range"] {
+      padding: 0;
+      background: transparent;
+      border: 0;
+    }
+
+    .toggle-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid rgba(140, 176, 255, 0.2);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .toggle input {
+      width: auto;
+      margin: 0;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 12px;
+    }
+
+    .metric {
+      padding: 14px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(140, 176, 255, 0.12);
+      display: grid;
+      gap: 6px;
+    }
+
+    .metric strong {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .viewer {
+      display: grid;
+      gap: 16px;
+    }
+
+    .canvas-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .canvas-card {
+      display: grid;
+      gap: 10px;
+    }
+
+    .canvas-card h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    canvas {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      border-radius: 18px;
+      border: 1px solid rgba(140, 176, 255, 0.14);
+      background:
+        radial-gradient(circle at 50% 45%, rgba(29, 45, 84, 0.65), rgba(4, 10, 20, 0.98) 65%),
+        #050b13;
+    }
+
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px 14px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      flex: 0 0 auto;
+    }
+
+    .hint {
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 980px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .canvas-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .field-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <h1>Heliocentric XYZ Spacecraft Model</h1>
+      <p>
+        This viewer uses a Sun-centered coordinate system. Enter a spacecraft position in kilometers,
+        explore the XY and XZ planes, and compare your spacecraft to a simplified solar-system layout.
+      </p>
+    </section>
+
+    <section class="layout">
+      <aside class="panel controls">
+        <div class="section">
+          <h2>Spacecraft Position</h2>
+          <div class="field-grid">
+            <div class="field">
+              <label for="spacecraft-x">X (km)</label>
+              <input id="spacecraft-x" type="number" value="149597870.7" step="1000" />
+            </div>
+            <div class="field">
+              <label for="spacecraft-y">Y (km)</label>
+              <input id="spacecraft-y" type="number" value="0" step="1000" />
+            </div>
+            <div class="field">
+              <label for="spacecraft-z">Z (km)</label>
+              <input id="spacecraft-z" type="number" value="0" step="1000" />
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Destination</h2>
+          <div class="field">
+            <label for="destination-select">Target</label>
+            <select id="destination-select">
+              <option value="earth">Earth</option>
+              <option value="moon">Moon</option>
+              <option value="mars">Mars</option>
+              <option value="jupiter">Jupiter</option>
+              <option value="saturn">Saturn</option>
+              <option value="uranus">Uranus</option>
+              <option value="neptune">Neptune</option>
+              <option value="pluto">Pluto</option>
+              <option value="custom">Custom coordinates</option>
+            </select>
+          </div>
+          <div class="field-grid">
+            <div class="field">
+              <label for="destination-x">Dest X (km)</label>
+              <input id="destination-x" type="number" value="227939200" step="1000" />
+            </div>
+            <div class="field">
+              <label for="destination-y">Dest Y (km)</label>
+              <input id="destination-y" type="number" value="0" step="1000" />
+            </div>
+            <div class="field">
+              <label for="destination-z">Dest Z (km)</label>
+              <input id="destination-z" type="number" value="0" step="1000" />
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Transfer Inputs</h2>
+          <div class="field-grid">
+            <div class="field">
+              <label for="cruise-speed">Cruise speed (km/s)</label>
+              <input id="cruise-speed" type="number" value="25" step="0.5" />
+            </div>
+            <div class="field">
+              <label for="dry-mass">Dry mass (kg)</label>
+              <input id="dry-mass" type="number" value="1500" step="10" />
+            </div>
+            <div class="field">
+              <label for="fuel-mass">Fuel mass (kg)</label>
+              <input id="fuel-mass" type="number" value="700" step="10" />
+            </div>
+          </div>
+          <div class="field-grid">
+            <div class="field">
+              <label for="isp-seconds">Isp (s)</label>
+              <input id="isp-seconds" type="number" value="320" step="1" />
+            </div>
+            <div class="field">
+              <label for="window-days">Departure window (days)</label>
+              <input id="window-days" type="number" value="365" step="1" />
+            </div>
+            <div class="field">
+              <label for="max-travel-days">Max travel (days)</label>
+              <input id="max-travel-days" type="number" value="500" step="1" />
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>View Controls</h2>
+          <div class="field">
+            <label for="scale-au">View radius (AU)</label>
+            <input id="scale-au" type="range" min="0.5" max="35" step="0.5" value="8" />
+            <div class="caption" id="scale-label"></div>
+          </div>
+          <div class="field">
+            <label for="day-offset">Simulation day offset</label>
+            <input id="day-offset" type="range" min="0" max="3650" step="1" value="0" />
+            <div class="caption" id="day-label"></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Display Options</h2>
+          <div class="toggle-row">
+            <label class="toggle">
+              <input id="show-orbits" type="checkbox" checked />
+              Show orbit guides
+            </label>
+            <label class="toggle">
+              <input id="show-labels" type="checkbox" checked />
+              Show labels
+            </label>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Quick Presets</h2>
+          <div class="field">
+            <label for="preset-select">Place spacecraft near</label>
+            <select id="preset-select">
+              <option value="">Custom coordinates</option>
+              <option value="sun">Sun center</option>
+              <option value="earth">Earth orbit</option>
+              <option value="mars">Mars orbit</option>
+              <option value="jupiter">Jupiter orbit</option>
+            </select>
+          </div>
+          <div class="hint">
+            Coordinates are heliocentric: the Sun stays at the origin, and all other positions are measured from that center.
+          </div>
+        </div>
+      </aside>
+
+      <section class="panel viewer">
+        <div class="metrics">
+          <div class="metric">
+            <span>Distance from Sun</span>
+            <strong id="sun-distance">0 km</strong>
+          </div>
+          <div class="metric">
+            <span>Distance from Earth</span>
+            <strong id="earth-distance">0 km</strong>
+          </div>
+          <div class="metric">
+            <span>Distance from Mars</span>
+            <strong id="mars-distance">0 km</strong>
+          </div>
+          <div class="metric">
+            <span>Current scale</span>
+            <strong id="scale-metric">0 AU</strong>
+          </div>
+          <div class="metric">
+            <span>Destination distance</span>
+            <strong id="destination-distance">0 km</strong>
+          </div>
+          <div class="metric">
+            <span>Fastest travel time</span>
+            <strong id="travel-metric">No route</strong>
+          </div>
+          <div class="metric">
+            <span>Estimated fuel needed</span>
+            <strong id="fuel-metric">0 kg</strong>
+          </div>
+          <div class="metric">
+            <span>Best departure</span>
+            <strong id="departure-metric">Day 0</strong>
+          </div>
+        </div>
+
+        <div class="section">
+          <h2>Transfer Summary</h2>
+          <p class="caption" id="trajectory-summary">
+            Enter your current location and a destination to estimate the earliest reachable transfer.
+          </p>
+        </div>
+
+        <div class="canvas-grid">
+          <article class="canvas-card">
+            <h3>XY Plane</h3>
+            <p class="caption">Top-down orbital view showing X and Y.</p>
+            <canvas id="canvas-xy" width="720" height="720"></canvas>
+          </article>
+
+          <article class="canvas-card">
+            <h3>XZ Plane</h3>
+            <p class="caption">Side view showing X and vertical displacement Z.</p>
+            <canvas id="canvas-xz" width="720" height="720"></canvas>
+          </article>
+        </div>
+
+        <div class="legend" id="legend"></div>
+      </section>
+    </section>
+  </main>
+
+  <script src="./script.js"></script>
+</body>
+</html>
