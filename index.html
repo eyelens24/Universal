@@ -15,6 +15,7 @@
       <label for="customTime">Set Time:</label>
       <input type="datetime-local" id="customTime" step="1" />
       <button id="applyTimeBtn">Apply Time</button>
+      <button id="backBtn" class="hidden">Back to Overview</button>
     </div>
 
     <div class="time-panel">
@@ -22,21 +23,39 @@
       <p><strong>Mode:</strong> <span id="modeDisplay">Real Time</span></p>
     </div>
 
-    <div class="legend">
-        <span><span class="dot mercury"></span>Mercury</span>
-        <span><span class="dot venus"></span>Venus</span>
-        <span><span class="dot earth"></span>Earth</span>
-        <span><span class="dot mars"></span>Mars</span>
-        <span><span class="dot asteroid"></span>Asteroids</span>
-        <span><span class="dot jupiter"></span>Jupiter</span>
-        <span><span class="dot saturn"></span>Saturn</span>
-        <span><span class="dot uranus"></span>Uranus</span>
-        <span><span class="dot neptune"></span>Neptune</span>
+    <div class="legend" id="legend">
+      <span><span class="dot mercury"></span>Mercury</span>
+      <span><span class="dot venus"></span>Venus</span>
+      <span><span class="dot earth"></span>Earth</span>
+      <span><span class="dot mars"></span>Mars</span>
+      <span><span class="dot asteroid"></span>Asteroids</span>
+      <span><span class="dot jupiter"></span>Jupiter</span>
+      <span><span class="dot saturn"></span>Saturn</span>
+      <span><span class="dot uranus"></span>Uranus</span>
+      <span><span class="dot neptune"></span>Neptune</span>
     </div>
+  </div>
 
   <div class="canvas-wrap">
     <canvas id="solarCanvas" width="1000" height="1000"></canvas>
+
+    <div id="planetInfo" class="planet-info hidden">
+      <div class="planet-info-card">
+        <div class="planet-info-left">
+          <img id="planetImage" src="" alt="Planet image" />
+        </div>
+
+        <div class="planet-info-right">
+          <h2 id="planetName">Planet</h2>
+          <p><strong>Distance from Earth:</strong> <span id="planetDistance"></span></p>
+          <p><strong>Size:</strong> <span id="planetSize"></span></p>
+          <p><strong>Temperature:</strong> <span id="planetTemp"></span></p>
+          <p><strong>Elements / Composition:</strong> <span id="planetElements"></span></p>
+        </div>
+      </div>
+    </div>
   </div>
+
   <script src="spice-browser.js"></script>
   <script src="script.js"></script>
 </body>
