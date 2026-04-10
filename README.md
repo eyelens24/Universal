@@ -12,4 +12,5 @@ Some problems with it is that:
 
 
 Our goal is to improve this system so that it:
-1. idk
+1. Accessible to people in the spaceship as well
+2. Works without constant input or feedback from earth
