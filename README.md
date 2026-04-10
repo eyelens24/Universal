@@ -11,9 +11,4 @@ Some problems with it is that:
 3. Trajectories done on earth are precomputed and hard to adapt to dynamically
 
 
-Our goal is to improve this system so that it:
-1. Accessible to people in the spaceship as well
-2. Works without constant input or feedback from earth
-
-External Links/Sources:
-https://github.com/lebesnec/solar-system?tab=MIT-1-ov-file
+Our goal is to improve this system so that it can be used by the people on the spaceship as well and so that there is tracking within the spaceship to make it less troublesome in the case that communication is lost or takes too long when immediate action is needed
