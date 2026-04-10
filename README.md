@@ -1,9 +1,15 @@
 # Universal
-Some problems found in the space are:
-1. Fuel is an extremely expensive and limited resource
-2. Gravity changes paths and small errors grow over time
-3. Space has other objects (such as debris)
+NASA uses a program called PNT (Position, Navigation and Timing) where its purpose is to:
+1. Precisely locate a spacecraft in space
+2. Calculate and adjust trajectories
+3. Do extremely precise calculations for timing
 
-Our goal is to improve the navigation system so that it:
-1. Calculates the trajectory of a spaceship to find the most efficient and safe route (Minimizing fuel usage and maximizing safety)
-2. Has some sort of live tracking so that the spaceship can quickly adjust before errors get too exponential or in cases where communication is lost, the people in the spaceship is able to navigate themself
+
+Some problems with it is that:
+1. It has heavy reliance on communication to earth, what happens if that communication is lost?
+2. The signal can take a while to transmit, and becomes less accurate the further they are from earth
+3. Trajectories done on earth are precomputed and hard to adapt to dynamically
+
+
+Our goal is to improve this system so that it:
+1. idk
