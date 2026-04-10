@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Solar System Simulation</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="ui">
+    <h1>Solar System Simulation</h1>
+
+    <div class="controls">
+      <button id="nowBtn">Use Current Time</button>
+      <label for="customTime">Set Time:</label>
+      <input type="datetime-local" id="customTime" step="1" />
+      <button id="applyTimeBtn">Apply Time</button>
+    </div>
+
+    <div class="time-panel">
+      <p><strong>Simulation Time:</strong> <span id="simTimeDisplay">Loading...</span></p>
+      <p><strong>Mode:</strong> <span id="modeDisplay">Real Time</span></p>
+    </div>
+
+    <div class="legend">
+      <span><span class="dot mercury"></span>Mercury</span>
+      <span><span class="dot venus"></span>Venus</span>
+      <span><span class="dot earth"></span>Earth</span>
+      <span><span class="dot mars"></span>Mars</span>
+      <span><span class="dot jupiter"></span>Jupiter</span>
+      <span><span class="dot saturn"></span>Saturn</span>
+      <span><span class="dot uranus"></span>Uranus</span>
+      <span><span class="dot neptune"></span>Neptune</span>
+    </div>
+  </div>
+
+  <div class="canvas-wrap">
+    <canvas id="solarCanvas" width="1000" height="1000"></canvas>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
