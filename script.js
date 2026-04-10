@@ -1,125 +1,254 @@
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+const canvas = document.getElementById("solarCanvas");
+const ctx = canvas.getContext("2d");
+
+const simTimeDisplay = document.getElementById("simTimeDisplay");
+const modeDisplay = document.getElementById("modeDisplay");
+const nowBtn = document.getElementById("nowBtn");
+const applyTimeBtn = document.getElementById("applyTimeBtn");
+const customTimeInput = document.getElementById("customTime");
+
+const spice = createSpiceEnvironment();
+
+const planetNames = [
+  "MERCURY",
+  "VENUS",
+  "EARTH",
+  "MARS",
+  "JUPITER",
+  "SATURN",
+  "URANUS",
+  "NEPTUNE"
+];
+
+let usingRealTime = true;
+let baseSimTime = new Date();
+let realTimestampAtBase = Date.now();
+
+const asteroidImg = new Image();
+asteroidImg.src = "assets/asteroid.png";
+
+const asteroidBeltInner = 180;
+const asteroidBeltOuter = 205;
+const asteroidCount = 140;
+const asteroids = [];
+
+function createAsteroids() {
+  asteroids.length = 0;
+
+  for (let i = 0; i < asteroidCount; i++) {
+    const orbitRadius = asteroidBeltInner + Math.random() * (asteroidBeltOuter - asteroidBeltInner);
+    const baseAngle = Math.random() * Math.PI * 2;
+    const orbitalPeriod = 1200 + Math.random() * 1800;
+    const size = 8 + Math.random() * 10;
+
+    asteroids.push({
+      orbitRadius,
+      baseAngle,
+      orbitalPeriod,
+      size
+    });
+  }
 }
 
-body {
-  min-height: 100vh;
-  font-family: Arial, Helvetica, sans-serif;
-  background:
-    radial-gradient(circle at center, #101a2c 0%, #090d16 45%, #04060b 100%);
-  color: white;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 20px;
+function resizeCanvas() {
+  const rect = canvas.getBoundingClientRect();
+  const size = Math.min(rect.width, rect.height);
+  const dpr = window.devicePixelRatio || 1;
+
+  canvas.width = size * dpr;
+  canvas.height = size * dpr;
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.scale(dpr, dpr);
 }
 
-.ui {
-  width: min(1100px, 95%);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(10px);
-  border-radius: 16px;
-  padding: 20px;
-  margin-bottom: 18px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+function getCurrentSimTime() {
+  if (usingRealTime) return new Date();
+  const elapsedMs = Date.now() - realTimestampAtBase;
+  return new Date(baseSimTime.getTime() + elapsedMs);
 }
 
-h1 {
-  text-align: center;
-  margin-bottom: 16px;
-  font-size: 2rem;
-  letter-spacing: 1px;
+function formatDateForInput(date) {
+  const pad = (n) => String(n).padStart(2, "0");
+
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: center;
-  align-items: center;
-  margin-bottom: 15px;
+function drawBackgroundStars(width, height) {
+  for (let i = 0; i < 120; i++) {
+    const x = (i * 73) % width;
+    const y = (i * 127) % height;
+    const r = (i % 3) + 1;
+
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(255,255,255,${0.15 + (i % 5) * 0.1})`;
+    ctx.arc(x, y, r * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
 }
 
-button,
-input[type="datetime-local"] {
-  border: none;
-  border-radius: 10px;
-  padding: 10px 14px;
-  font-size: 0.95rem;
+function drawAsteroidBelt(simDate, centerX, centerY) {
+  const et = spice.time.dateToEt(simDate);
+  const days = et / 86400;
+
+  ctx.beginPath();
+  ctx.strokeStyle = "rgba(200, 180, 150, 0.08)";
+  ctx.lineWidth = 18;
+  ctx.arc(centerX, centerY, (asteroidBeltInner + asteroidBeltOuter) / 2, 0, Math.PI * 2);
+  ctx.stroke();
+
+  asteroids.forEach((asteroid) => {
+    const angle = asteroid.baseAngle + (days / asteroid.orbitalPeriod) * Math.PI * 2;
+    const x = centerX + Math.cos(angle) * asteroid.orbitRadius;
+    const y = centerY + Math.sin(angle) * asteroid.orbitRadius;
+
+    if (asteroidImg.complete && asteroidImg.naturalWidth > 0) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.drawImage(
+        asteroidImg,
+        -asteroid.size / 2,
+        -asteroid.size / 2,
+        asteroid.size,
+        asteroid.size
+      );
+      ctx.restore();
+    } else {
+      ctx.beginPath();
+      ctx.fillStyle = "#9a8f80";
+      ctx.arc(x, y, asteroid.size / 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  });
 }
 
-button {
-  background: #ffd166;
-  color: #111;
-  font-weight: bold;
-  cursor: pointer;
-  transition: transform 0.15s ease, opacity 0.15s ease;
+function getPlanetDrawData(name, simDate, scale) {
+  const et = spice.time.dateToEt(simDate);
+  const state = spice.getBodyHeliocentricState(name, et).state;
+  const info = spice.getBodyInfo(name);
+
+  return {
+    name,
+    info,
+    xKm: state.position.x,
+    yKm: state.position.y,
+    zKm: state.position.z,
+    x: state.position.x * scale,
+    y: state.position.y * scale
+  };
 }
 
-button:hover {
-  transform: translateY(-2px);
-  opacity: 0.92;
+function drawSolarSystem(simDate) {
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  const centerX = width / 2;
+  const centerY = height / 2;
+
+  ctx.clearRect(0, 0, width, height);
+  drawBackgroundStars(width, height);
+
+  // scale km -> pixels using Neptune distance
+  const neptuneEt = spice.time.dateToEt(simDate);
+  const neptuneState = spice.getBodyHeliocentricState("NEPTUNE", neptuneEt).state.position.norm();
+  const maxVisualRadius = Math.min(width, height) * 0.43;
+  const scale = maxVisualRadius / neptuneState;
+
+  // orbit guides
+  planetNames.forEach((name) => {
+    const info = spice.getBodyInfo(name);
+    const orbitRadiusPx = info.a * AU_KM * scale;
+
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 1;
+    ctx.arc(centerX, centerY, orbitRadiusPx, 0, Math.PI * 2);
+    ctx.stroke();
+  });
+
+  drawAsteroidBelt(simDate, centerX, centerY);
+
+  const glow = ctx.createRadialGradient(centerX, centerY, 10, centerX, centerY, 40);
+  glow.addColorStop(0, "rgba(255, 220, 120, 1)");
+  glow.addColorStop(0.45, "rgba(255, 180, 70, 0.85)");
+  glow.addColorStop(1, "rgba(255, 150, 50, 0)");
+
+  ctx.beginPath();
+  ctx.fillStyle = glow;
+  ctx.arc(centerX, centerY, 40, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.fillStyle = "#ffb347";
+  ctx.arc(centerX, centerY, 16, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "white";
+  ctx.font = "bold 14px Arial";
+  ctx.fillText("Sun", centerX - 12, centerY - 24);
+
+  planetNames.forEach((name) => {
+    const planet = getPlanetDrawData(name, simDate, scale);
+    const px = centerX + planet.x;
+    const py = centerY + planet.y;
+
+    let radius = 5;
+    if (name === "JUPITER") radius = 11;
+    if (name === "SATURN") radius = 10;
+    if (name === "URANUS" || name === "NEPTUNE") radius = 8;
+    if (name === "VENUS" || name === "EARTH") radius = 6;
+    if (name === "MARS") radius = 5;
+    if (name === "MERCURY") radius = 4;
+
+    ctx.beginPath();
+    ctx.fillStyle = planet.info.color || "white";
+    ctx.arc(px, py, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (name === "SATURN") {
+      ctx.beginPath();
+      ctx.strokeStyle = "rgba(231, 210, 141, 0.9)";
+      ctx.lineWidth = 2;
+      ctx.ellipse(px, py, radius + 7, radius + 3, -0.4, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.font = "12px Arial";
+    ctx.fillText(name.charAt(0) + name.slice(1).toLowerCase(), px + 8, py - 8);
+  });
 }
 
-input[type="datetime-local"] {
-  background: rgba(255, 255, 255, 0.92);
-  color: #111;
+function updateUI(simDate) {
+  simTimeDisplay.textContent = simDate.toLocaleString();
+  modeDisplay.textContent = usingRealTime
+    ? "Real Time"
+    : "Custom Time (continues running from chosen date/time)";
 }
 
-.time-panel {
-  text-align: center;
-  margin-bottom: 15px;
-  line-height: 1.8;
-  font-size: 1rem;
+function animate() {
+  const simDate = getCurrentSimTime();
+  drawSolarSystem(simDate);
+  updateUI(simDate);
+  requestAnimationFrame(animate);
 }
 
-.legend {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 14px;
-  font-size: 0.9rem;
-}
+nowBtn.addEventListener("click", () => {
+  usingRealTime = true;
+  customTimeInput.value = formatDateForInput(new Date());
+});
 
-.legend span {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
+applyTimeBtn.addEventListener("click", () => {
+  if (!customTimeInput.value) return;
 
-.dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  display: inline-block;
-}
+  usingRealTime = false;
+  baseSimTime = new Date(customTimeInput.value);
+  realTimestampAtBase = Date.now();
+});
 
-.mercury { background: #b7b7b7; }
-.venus { background: #d8b26e; }
-.earth { background: #4da6ff; }
-.mars { background: #d96b4d; }
-.jupiter { background: #d9b38c; }
-.saturn { background: #e7d28d; }
-.uranus { background: #8fe3ff; }
-.neptune { background: #4b70dd; }
+window.addEventListener("resize", resizeCanvas);
 
-.canvas-wrap {
-  width: min(1000px, 95vw);
-  aspect-ratio: 1 / 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-canvas {
-  width: 100%;
-  height: 100%;
-  background:
-    radial-gradient(circle at center, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0.15) 65%, rgba(0,0,0,0.3) 100%);
-  border-radius: 18px;
-  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.45);
-  border: 1px solid rgba(255,255,255,0.08);
-}
+customTimeInput.value = formatDateForInput(new Date());
+createAsteroids();
+resizeCanvas();
+animate();
