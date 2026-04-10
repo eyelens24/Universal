@@ -6,6 +6,16 @@ const modeDisplay = document.getElementById("modeDisplay");
 const nowBtn = document.getElementById("nowBtn");
 const applyTimeBtn = document.getElementById("applyTimeBtn");
 const customTimeInput = document.getElementById("customTime");
+const backBtn = document.getElementById("backBtn");
+
+const planetInfo = document.getElementById("planetInfo");
+const planetImage = document.getElementById("planetImage");
+const planetNameEl = document.getElementById("planetName");
+const planetDistanceEl = document.getElementById("planetDistance");
+const planetSizeEl = document.getElementById("planetSize");
+const planetTempEl = document.getElementById("planetTemp");
+const planetElementsEl = document.getElementById("planetElements");
+const legend = document.getElementById("legend");
 
 const spice = createSpiceEnvironment();
 
@@ -20,9 +30,55 @@ const planetNames = [
   "NEPTUNE"
 ];
 
+const planetExtraData = {
+  MERCURY: {
+    displayName: "Mercury",
+    temp: "-180°C to 430°C",
+    elements: "Rocky surface with silicates, iron-rich core, oxygen, sodium, hydrogen, helium, potassium"
+  },
+  VENUS: {
+    displayName: "Venus",
+    temp: "About 465°C",
+    elements: "Carbon dioxide atmosphere, nitrogen, sulfuric acid clouds, rocky silicate crust, iron core"
+  },
+  EARTH: {
+    displayName: "Earth",
+    temp: "Average about 15°C",
+    elements: "Nitrogen, oxygen, argon, carbon, silicon, iron, water"
+  },
+  MARS: {
+    displayName: "Mars",
+    temp: "-125°C to 20°C",
+    elements: "Carbon dioxide atmosphere, iron oxide, silicon, oxygen, magnesium, aluminum"
+  },
+  JUPITER: {
+    displayName: "Jupiter",
+    temp: "About -145°C",
+    elements: "Mostly hydrogen and helium, with methane, ammonia, water vapor"
+  },
+  SATURN: {
+    displayName: "Saturn",
+    temp: "About -178°C",
+    elements: "Mostly hydrogen and helium, traces of methane, ammonia, water"
+  },
+  URANUS: {
+    displayName: "Uranus",
+    temp: "About -224°C",
+    elements: "Hydrogen, helium, methane, water, ammonia"
+  },
+  NEPTUNE: {
+    displayName: "Neptune",
+    temp: "About -214°C",
+    elements: "Hydrogen, helium, methane, water, ammonia"
+  }
+};
+
 let usingRealTime = true;
 let baseSimTime = new Date();
 let realTimestampAtBase = Date.now();
+
+let selectedPlanet = null;
+let clickablePlanets = [];
 
 const asteroidImg = new Image();
 asteroidImg.src = "assets/asteroid.png";
@@ -31,6 +87,13 @@ const asteroidBeltInner = 180;
 const asteroidBeltOuter = 205;
 const asteroidCount = 140;
 const asteroids = [];
+
+const planetImages = {};
+planetNames.forEach((name) => {
+  const img = new Image();
+  img.src = `assets/${name.toLowerCase()}.png`;
+  planetImages[name] = img;
+});
 
 function createAsteroids() {
   asteroids.length = 0;
@@ -70,8 +133,16 @@ function getCurrentSimTime() {
 
 function formatDateForInput(date) {
   const pad = (n) => String(n).padStart(2, "0");
-
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function formatKm(value) {
+  return `${Math.round(value).toLocaleString()} km`;
+}
+
+function formatLightYears(km) {
+  const lightYearKm = 9.4607e12;
+  return `${(km / lightYearKm).toExponential(6)} ly`;
 }
 
 function drawBackgroundStars(width, height) {
@@ -139,22 +210,93 @@ function getPlanetDrawData(name, simDate, scale) {
   };
 }
 
-function drawSolarSystem(simDate) {
-  const width = canvas.clientWidth;
-  const height = canvas.clientHeight;
+function getPlanetRadius(name) {
+  if (name === "JUPITER") return 26;
+  if (name === "SATURN") return 24;
+  if (name === "URANUS" || name === "NEPTUNE") return 18;
+  if (name === "VENUS" || name === "EARTH") return 16;
+  if (name === "MARS") return 14;
+  return 12;
+}
+
+function getDistanceFromEarth(name, simDate) {
+  const et = spice.time.dateToEt(simDate);
+  const earthState = spice.getBodyHeliocentricState("EARTH", et).state.position;
+  const otherState = spice.getBodyHeliocentricState(name, et).state.position;
+
+  const dx = otherState.x - earthState.x;
+  const dy = otherState.y - earthState.y;
+  const dz = otherState.z - earthState.z;
+
+  return Math.hypot(dx, dy, dz);
+}
+
+function updatePlanetInfo(name, simDate) {
+  const extra = planetExtraData[name];
+  const radii = spice.geometry.getRadii(name);
+  const distance = getDistanceFromEarth(name, simDate);
+
+  planetNameEl.textContent = extra.displayName;
+  planetDistanceEl.textContent = `${formatKm(distance)} (${formatLightYears(distance)})`;
+  planetSizeEl.textContent = `Radius: ${Math.round(radii.a).toLocaleString()} km`;
+  planetTempEl.textContent = extra.temp;
+  planetElementsEl.textContent = extra.elements;
+  planetImage.src = `assets/${name.toLowerCase()}.png`;
+  planetImage.alt = extra.displayName;
+}
+
+function drawSelectedPlanetView(simDate, width, height) {
+  const centerX = width / 2;
+  const centerY = height / 2 - 70;
+  const name = selectedPlanet;
+  const info = spice.getBodyInfo(name);
+  const radius = Math.min(width, height) * 0.14;
+
+  const img = planetImages[name];
+
+  ctx.beginPath();
+  ctx.strokeStyle = "rgba(255,255,255,0.08)";
+  ctx.lineWidth = 2;
+  ctx.arc(centerX, centerY, radius + 12, 0, Math.PI * 2);
+  ctx.stroke();
+
+  if (img.complete && img.naturalWidth > 0) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(img, centerX - radius, centerY - radius, radius * 2, radius * 2);
+    ctx.restore();
+  } else {
+    ctx.beginPath();
+    ctx.fillStyle = info.color || "white";
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = "white";
+  ctx.font = "bold 28px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText(planetExtraData[name].displayName, centerX, centerY - radius - 28);
+  ctx.textAlign = "start";
+
+  updatePlanetInfo(name, simDate);
+  planetInfo.classList.remove("hidden");
+  backBtn.classList.remove("hidden");
+  legend.classList.add("hidden");
+}
+
+function drawOverview(simDate, width, height) {
   const centerX = width / 2;
   const centerY = height / 2;
 
-  ctx.clearRect(0, 0, width, height);
-  drawBackgroundStars(width, height);
-
-  // scale km -> pixels using Neptune distance
   const neptuneEt = spice.time.dateToEt(simDate);
   const neptuneState = spice.getBodyHeliocentricState("NEPTUNE", neptuneEt).state.position.norm();
-  const maxVisualRadius = Math.min(width, height) * 0.43;
+  const maxVisualRadius = Math.min(width, height) * 0.36;
   const scale = maxVisualRadius / neptuneState;
 
-  // orbit guides
+  clickablePlanets = [];
+
   planetNames.forEach((name) => {
     const info = spice.getBodyInfo(name);
     const orbitRadiusPx = info.a * AU_KM * scale;
@@ -183,40 +325,52 @@ function drawSolarSystem(simDate) {
   ctx.arc(centerX, centerY, 16, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "white";
-  ctx.font = "bold 14px Arial";
-  ctx.fillText("Sun", centerX - 12, centerY - 24);
-
   planetNames.forEach((name) => {
     const planet = getPlanetDrawData(name, simDate, scale);
     const px = centerX + planet.x;
     const py = centerY + planet.y;
+    const radius = getPlanetRadius(name);
+    const img = planetImages[name];
 
-    let radius = 5;
-    if (name === "JUPITER") radius = 11;
-    if (name === "SATURN") radius = 10;
-    if (name === "URANUS" || name === "NEPTUNE") radius = 8;
-    if (name === "VENUS" || name === "EARTH") radius = 6;
-    if (name === "MARS") radius = 5;
-    if (name === "MERCURY") radius = 4;
-
-    ctx.beginPath();
-    ctx.fillStyle = planet.info.color || "white";
-    ctx.arc(px, py, radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    if (name === "SATURN") {
+    if (img.complete && img.naturalWidth > 0) {
+      ctx.save();
       ctx.beginPath();
-      ctx.strokeStyle = "rgba(231, 210, 141, 0.9)";
-      ctx.lineWidth = 2;
-      ctx.ellipse(px, py, radius + 7, radius + 3, -0.4, 0, Math.PI * 2);
-      ctx.stroke();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(img, px - radius, py - radius, radius * 2, radius * 2);
+      ctx.restore();
+    } else {
+      ctx.beginPath();
+      ctx.fillStyle = planet.info.color || "white";
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    ctx.fillStyle = "rgba(255,255,255,0.9)";
-    ctx.font = "12px Arial";
-    ctx.fillText(name.charAt(0) + name.slice(1).toLowerCase(), px + 8, py - 8);
+    clickablePlanets.push({
+      name,
+      x: px,
+      y: py,
+      radius: radius + 8
+    });
   });
+
+  planetInfo.classList.add("hidden");
+  backBtn.classList.add("hidden");
+  legend.classList.remove("hidden");
+}
+
+function drawSolarSystem(simDate) {
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+
+  ctx.clearRect(0, 0, width, height);
+  drawBackgroundStars(width, height);
+
+  if (selectedPlanet) {
+    drawSelectedPlanetView(simDate, width, height);
+  } else {
+    drawOverview(simDate, width, height);
+  }
 }
 
 function updateUI(simDate) {
@@ -232,6 +386,29 @@ function animate() {
   updateUI(simDate);
   requestAnimationFrame(animate);
 }
+
+canvas.addEventListener("click", (event) => {
+  if (selectedPlanet) return;
+
+  const rect = canvas.getBoundingClientRect();
+  const mouseX = event.clientX - rect.left;
+  const mouseY = event.clientY - rect.top;
+
+  for (const planet of clickablePlanets) {
+    const dx = mouseX - planet.x;
+    const dy = mouseY - planet.y;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist <= planet.radius) {
+      selectedPlanet = planet.name;
+      break;
+    }
+  }
+});
+
+backBtn.addEventListener("click", () => {
+  selectedPlanet = null;
+});
 
 nowBtn.addEventListener("click", () => {
   usingRealTime = true;
