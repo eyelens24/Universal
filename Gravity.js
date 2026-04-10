@@ -1,117 +1,50 @@
-"use strict";
 
 /*
   ============================================
-  SOLAR SYSTEM GRAVITY SIMULATOR
+  GRAVITY.JS — SPICE-DRIVEN SOLAR SYSTEM GRAVITY SIMULATOR
   ============================================
 
-  What this code does:
-  - Models bodies moving on simple circular orbits
-  - Computes gravity from each body on a spaceship
-  - Returns both:
+  What this file does:
+  - Loads real solar-system body states from SPICE through spice-integration.js
+  - Computes gravity from those bodies on a spacecraft
+  - Returns:
       (a) total gravitational acceleration
       (b) per-body gravity contributions
-  - Propagates the ship forward in time with RK4
-  - Lets you query gravity at any given time
+  - Propagates the spacecraft with RK4
+  - Lets you query gravity at any given ephemeris time (ET)
 
-  Recommended units:
+  Units used:
   - distance: km
   - time: s
   - velocity: km/s
   - acceleration: km/s^2
   - mu: km^3/s^2
+  - SPICE ET: seconds past J2000 TDB
 
-  Important:
-  - This is a Newtonian point-mass model.
-  - Planet orbits here are simplified circular demo orbits.
-  - For higher realism, replace orbit functions with ephemeris data.
+  IMPORTANT:
+  - This is still a Newtonian point-mass gravity model for the spacecraft.
+  - The planets/moon/sun are NOT numerically integrated here.
+    Their positions come from SPICE kernels.
+  - This is usually the correct architecture:
+      SPICE = environment truth
+      Your simulator = spacecraft dynamics
 */
 
+const path = require("path");
+const {
+  Vec3,
+  StateVector,
+  createSpiceEnvironment,
+} = require("./spice-integration");
 
 /* =========================
-   1) 3D vector class
+   1) Spacecraft state
    ========================= */
-class Vec3 {
-  constructor(x = 0, y = 0, z = 0) {
-    this.x = x;
-    this.y = y;
-    this.z = z;
-  }
-
-  add(v) {
-    return new Vec3(this.x + v.x, this.y + v.y, this.z + v.z);
-  }
-
-  sub(v) {
-    return new Vec3(this.x - v.x, this.y - v.y, this.z - v.z);
-  }
-
-  scale(s) {
-    return new Vec3(this.x * s, this.y * s, this.z * s);
-  }
-
-  dot(v) {
-    return this.x * v.x + this.y * v.y + this.z * v.z;
-  }
-
-  magnitudeSquared() {
-    return this.dot(this);
-  }
-
-  magnitude() {
-    return Math.sqrt(this.magnitudeSquared());
-  }
-
-  normalize() {
-    const mag = this.magnitude();
-    if (mag === 0) return new Vec3(0, 0, 0);
-    return this.scale(1 / mag);
-  }
-
-  toObject() {
-    return { x: this.x, y: this.y, z: this.z };
-  }
-
-  toString() {
-    return `(${this.x}, ${this.y}, ${this.z})`;
-  }
-}
-
-
-/* =========================
-   2) Celestial body
-   =========================
-   Variables:
-   - name: label, e.g. "Earth"
-   - mu: gravitational parameter = G*M
-   - getPosition(t): returns body position at time t
-*/
-class Body {
-  constructor(name, mu, getPosition) {
-    this.name = name;
-    this.mu = mu;
-    this.getPosition = getPosition;
-  }
-
-  positionAt(t) {
-    return this.getPosition(t);
-  }
-}
-
-
-/* =========================
-   3) Spacecraft state
-   =========================
-   Variables:
-   - position: ship location (x, y, z)
-   - velocity: ship velocity (vx, vy, vz)
-   - time: current time
-*/
 class SpacecraftState {
   constructor(position, velocity, time = 0) {
     this.position = position;
     this.velocity = velocity;
-    this.time = time;
+    this.time = time; // ET in seconds
   }
 
   clone() {
@@ -121,67 +54,59 @@ class SpacecraftState {
       this.time
     );
   }
+
+  toString() {
+    return `SpacecraftState(pos=${this.position.toString()}, vel=${this.velocity.toString()}, time=${this.time})`;
+  }
 }
 
-
 /* =========================
-   4) Orbit helpers
-   ========================= */
-
-/*
-  Make a body move on a circular orbit in the xy-plane.
-
-  Variables:
-  - radius: orbital radius from center body
-  - period: orbital period
-  - phase: starting angle in radians
-  - centerFn(t): returns the center position, usually the Sun at origin
+   2) SPICE-backed body
+   =========================
+   A body is queried from SPICE at any ET.
 */
-function makeCircularOrbitBody({
-  name,
-  mu,
-  radius,
-  period,
-  phase = 0,
-  centerFn = () => new Vec3(0, 0, 0)
-}) {
-  const angularRate = (2 * Math.PI) / period;
+class SpiceBody {
+  constructor({
+    name,
+    mu,
+    radii = null,
+    stateProvider,
+  }) {
+    this.name = name;
+    this.mu = mu;
+    this.radii = radii;
+    this._stateProvider = stateProvider;
+  }
 
-  return new Body(name, mu, (t) => {
-    const center = centerFn(t);
-    const theta = angularRate * t + phase;
+  stateAt(et) {
+    return this._stateProvider(et);
+  }
 
-    return center.add(
-      new Vec3(
-        radius * Math.cos(theta),
-        radius * Math.sin(theta),
-        0
-      )
-    );
-  });
+  positionAt(et) {
+    return this.stateAt(et).position;
+  }
+
+  velocityAt(et) {
+    return this.stateAt(et).velocity;
+  }
 }
 
-
 /* =========================
-   5) Gravity calculations
+   3) Gravity calculations
    =========================
 
    Standard point-mass gravity from one body:
 
    a_i = -mu_i * (r_ship - r_body) / |r_ship - r_body|^3
-
-   Variables:
-   - r_ship: spaceship position
-   - r_body: body position at time t
-   - mu: body gravity strength
-   - dr: vector from body to ship
-   - distance: separation magnitude
 */
-function gravityFromBody(shipPosition, body, t, softening = 0) {
-  const bodyPosition = body.positionAt(t);
+function gravityFromBody(shipPosition, body, et, softening = 0) {
+  if (body.mu == null || !Number.isFinite(body.mu)) {
+    throw new Error(`Body ${body.name} does not have a valid gravitational parameter (mu).`);
+  }
+
+  const bodyPosition = body.positionAt(et);
   const dr = shipPosition.sub(bodyPosition);
 
-  // Optional tiny softening to avoid singularity if extremely close.
   const r2 = dr.magnitudeSquared() + softening * softening;
   const r = Math.sqrt(r2);
 
@@ -198,59 +123,51 @@ function gravityFromBody(shipPosition, body, t, softening = 0) {
     relativeVector: dr,
     distance: r,
     mu: body.mu,
-    acceleration
+    acceleration,
+    radii: body.radii,
   };
 }
 
-
-/*
-  Compute full gravity breakdown at a given time.
-
-  Returns:
-  - totalAcceleration
-  - contributions: array of each body's gravity effect
-*/
-function gravityBreakdown(shipPosition, bodies, t, softening = 0) {
+function gravityBreakdown(shipPosition, bodies, et, softening = 0) {
   const contributions = [];
   let totalAcceleration = new Vec3(0, 0, 0);
 
   for (const body of bodies) {
-    const contrib = gravityFromBody(shipPosition, body, t, softening);
+    const contrib = gravityFromBody(shipPosition, body, et, softening);
     contributions.push(contrib);
     totalAcceleration = totalAcceleration.add(contrib.acceleration);
   }
 
   return {
-    time: t,
+    time: et,
     shipPosition,
     totalAcceleration,
-    contributions
+    contributions,
   };
 }
 
-
-/*
-  Convenience: get only the total gravitational acceleration.
-*/
-function totalGravity(shipPosition, bodies, t, softening = 0) {
-  return gravityBreakdown(shipPosition, bodies, t, softening).totalAcceleration;
+function totalGravity(shipPosition, bodies, et, softening = 0) {
+  return gravityBreakdown(shipPosition, bodies, et, softening).totalAcceleration;
 }
 
-
 /* =========================
-   6) State derivative
+   4) State derivative
    =========================
-
-   For the ship:
-   d(position)/dt = velocity
-   d(velocity)/dt = totalGravity(position, t)
-   d(time)/dt     = 1
 */
-function stateDerivative(state, bodies, softening = 0) {
+function stateDerivative(state, bodies, softening = 0, extraAccelerationFn = null) {
+  let accel = totalGravity(state.position, bodies, state.time, softening);
+
+  if (typeof extraAccelerationFn === "function") {
+    const extra = extraAccelerationFn(state, bodies);
+    if (extra) {
+      accel = accel.add(extra);
+    }
+  }
+
   return {
     dPosition: state.velocity,
-    dVelocity: totalGravity(state.position, bodies, state.time, softening),
-    dTime: 1
+    dVelocity: accel,
+    dTime: 1,
   };
 }
 
@@ -262,18 +179,14 @@ function applyDerivative(state, deriv, dt) {
   );
 }
 
-
 /* =========================
-   7) RK4 integrator
-   =========================
-
-   More accurate than Euler.
-*/
-function rk4Step(state, bodies, dt, softening = 0) {
-  const k1 = stateDerivative(state, bodies, softening);
-  const k2 = stateDerivative(applyDerivative(state, k1, dt / 2), bodies, softening);
-  const k3 = stateDerivative(applyDerivative(state, k2, dt / 2), bodies, softening);
-  const k4 = stateDerivative(applyDerivative(state, k3, dt), bodies, softening);
+   5) RK4 integrator
+   ========================= */
+function rk4Step(state, bodies, dt, softening = 0, extraAccelerationFn = null) {
+  const k1 = stateDerivative(state, bodies, softening, extraAccelerationFn);
+  const k2 = stateDerivative(applyDerivative(state, k1, dt / 2), bodies, softening, extraAccelerationFn);
+  const k3 = stateDerivative(applyDerivative(state, k2, dt / 2), bodies, softening, extraAccelerationFn);
+  const k4 = stateDerivative(applyDerivative(state, k3, dt), bodies, softening, extraAccelerationFn);
 
   const newPosition = state.position
     .add(k1.dPosition.scale(dt / 6))
@@ -290,29 +203,48 @@ function rk4Step(state, bodies, dt, softening = 0) {
   return new SpacecraftState(newPosition, newVelocity, state.time + dt);
 }
 
-
 /* =========================
-   8) Simulator wrapper
+   6) Gravity simulator
    ========================= */
 class GravitySimulator {
   constructor(bodies, options = {}) {
     this.bodies = bodies;
     this.softening = options.softening ?? 0;
+    this.extraAccelerationFn = options.extraAccelerationFn ?? null;
   }
 
-  getBodyPositions(t) {
-    return this.bodies.map(body => ({
+  getBodyStates(et) {
+    return this.bodies.map((body) => {
+      const state = body.stateAt(et);
+      return {
+        name: body.name,
+        mu: body.mu,
+        radii: body.radii,
+        position: state.position,
+        velocity: state.velocity,
+      };
+    });
+  }
+
+  getBodyPositions(et) {
+    return this.bodies.map((body) => ({
       name: body.name,
-      position: body.positionAt(t)
+      position: body.positionAt(et),
     }));
   }
 
-  getGravityAt(shipPosition, t) {
-    return gravityBreakdown(shipPosition, this.bodies, t, this.softening);
+  getGravityAt(shipPosition, et) {
+    return gravityBreakdown(shipPosition, this.bodies, et, this.softening);
   }
 
   stepShip(state, dt) {
-    return rk4Step(state, this.bodies, dt, this.softening);
+    return rk4Step(
+      state,
+      this.bodies,
+      dt,
+      this.softening,
+      this.extraAccelerationFn
+    );
   }
 
   simulateShip(initialState, dt, steps) {
@@ -328,126 +260,257 @@ class GravitySimulator {
         position: state.position,
         velocity: state.velocity,
         totalAcceleration: gravity.totalAcceleration,
-        contributions: gravity.contributions
+        contributions: gravity.contributions,
       });
 
       state = this.stepShip(state, dt);
     }
 
+    history.push({
+      step: steps,
+      time: state.time,
+      position: state.position,
+      velocity: state.velocity,
+      totalAcceleration: this.getGravityAt(state.position, state.time).totalAcceleration,
+      contributions: this.getGravityAt(state.position, state.time).contributions,
+    });
+
     return history;
   }
 }
 
-
 /* =========================
-   9) Example solar system
+   7) SPICE body builder
    =========================
 
-   These are common gravitational parameters in km^3/s^2.
+   Creates SpiceBody objects using the same frame/origin conventions
+   as spice-integration.js.
 */
-const MU_SUN   = 132712440018.0;
-const MU_MERC  = 22031.86855;
-const MU_VENUS = 324858.592;
-const MU_EARTH = 398600.4418;
-const MU_MARS  = 42828.375214;
-const MU_JUP   = 126686534.0;
+async function buildSpiceBodies({
+  kernelPaths,
+  bodyNames,
+  refFrame = "J2000",
+  observer = "SOLAR SYSTEM BARYCENTER",
+  abcorr = "NONE",
+}) {
+  const spice = await createSpiceEnvironment();
 
-// Orbital radii in km (very simplified circular averages)
-const AU = 149_597_870.7;
+  spice.loadStandardSolarSystemKernels({
+    lsk: kernelPaths.lsk,
+    pck: kernelPaths.pck,
+    spk: kernelPaths.spk,
+    extra: kernelPaths.extra ?? [],
+  });
 
-const PERIOD_DAY = 24 * 3600;
-const PERIOD_YEAR = 365.25 * PERIOD_DAY;
+  const bodies = bodyNames.map((bodyName) => {
+    let mu = null;
+    let radii = null;
 
-// Sun fixed at origin
-const sun = new Body("Sun", MU_SUN, () => new Vec3(0, 0, 0));
+    try {
+      mu = spice.geometry.getGM(bodyName);
+    } catch (err) {
+      // leave null if unavailable
+    }
 
-// Simple circular orbits around Sun
-const mercury = makeCircularOrbitBody({
-  name: "Mercury",
-  mu: MU_MERC,
-  radius: 0.387 * AU,
-  period: 87.969 * PERIOD_DAY,
-  phase: 0.3
-});
+    try {
+      radii = spice.geometry.getRadii(bodyName);
+    } catch (err) {
+      // leave null if unavailable
+    }
 
-const venus = makeCircularOrbitBody({
-  name: "Venus",
-  mu: MU_VENUS,
-  radius: 0.723 * AU,
-  period: 224.701 * PERIOD_DAY,
-  phase: 1.2
-});
+    return new SpiceBody({
+      name: bodyName,
+      mu,
+      radii,
+      stateProvider: (et) => {
+        const result = spice.geometry.getState(
+          bodyName,
+          et,
+          refFrame,
+          abcorr,
+          observer
+        );
+        return result.state;
+      },
+    });
+  });
 
-const earth = makeCircularOrbitBody({
-  name: "Earth",
-  mu: MU_EARTH,
-  radius: 1.0 * AU,
-  period: 365.25 * PERIOD_DAY,
-  phase: 0
-});
+  return {
+    spice,
+    bodies,
+    refFrame,
+    observer,
+    abcorr,
+  };
+}
 
-const mars = makeCircularOrbitBody({
-  name: "Mars",
-  mu: MU_MARS,
-  radius: 1.524 * AU,
-  period: 686.98 * PERIOD_DAY,
-  phase: 0.8
-});
+/* =========================
+   8) Convenience builder
+   ========================= */
+async function buildGravitySimulatorFromSpice({
+  kernelPaths,
+  bodyNames = [
+    "SUN",
+    "MERCURY BARYCENTER",
+    "VENUS BARYCENTER",
+    "EARTH",
+    "MOON",
+    "MARS BARYCENTER",
+    "JUPITER BARYCENTER",
+  ],
+  refFrame = "J2000",
+  observer = "SOLAR SYSTEM BARYCENTER",
+  abcorr = "NONE",
+  softening = 0,
+  extraAccelerationFn = null,
+}) {
+  const { spice, bodies } = await buildSpiceBodies({
+    kernelPaths,
+    bodyNames,
+    refFrame,
+    observer,
+    abcorr,
+  });
 
-const jupiter = makeCircularOrbitBody({
-  name: "Jupiter",
-  mu: MU_JUP,
-  radius: 5.203 * AU,
-  period: 4332.59 * PERIOD_DAY,
-  phase: 2.0
-});
+  const simulator = new GravitySimulator(bodies, {
+    softening,
+    extraAccelerationFn,
+  });
 
-// Add whichever bodies you want included in the force model
-const bodies = [sun, mercury, venus, earth, mars, jupiter];
+  return {
+    spice,
+    simulator,
+    bodies,
+    refFrame,
+    observer,
+    abcorr,
+  };
+}
 
+/* =========================
+   9) Utility helpers
+   ========================= */
+
+function ensureAllBodiesHaveMu(bodies) {
+  const missing = bodies.filter((b) => !(Number.isFinite(b.mu)));
+  if (missing.length > 0) {
+    throw new Error(
+      `These bodies are missing GM/mu values in loaded kernels: ${missing.map((b) => b.name).join(", ")}`
+    );
+  }
+}
+
+function formatContribution(contrib) {
+  return [
+    `Body: ${contrib.body}`,
+    `  Body position: ${contrib.bodyPosition.toString()}`,
+    `  Distance: ${contrib.distance}`,
+    `  Mu: ${contrib.mu}`,
+    `  Acceleration from body: ${contrib.acceleration.toString()}`,
+  ].join("\n");
+}
 
 /* =========================
    10) Example usage
-   ========================= */
-const simulator = new GravitySimulator(bodies, {
-  // Set to small positive number if you want numerical softening near centers
-  softening: 0
-});
+   =========================
 
-// Example ship state:
-// Start near Earth's orbit, with a roughly heliocentric tangential velocity
-let ship = new SpacecraftState(
-  new Vec3(AU + 20_000, 0, 0),
-  new Vec3(0, 29.8, 0),
-  0
-);
+   IMPORTANT:
+   Replace the kernel file names with the ones you actually downloaded.
+*/
+async function main() {
+  const kernelDir = path.resolve("./kernels");
 
-// Query gravity at any given moment
-const gravityNow = simulator.getGravityAt(ship.position, ship.time);
+  const kernelPaths = {
+    lsk: path.join(kernelDir, "naif0012.tls"),
+    pck: path.join(kernelDir, "gm_de440.tpc"),
+    spk: path.join(kernelDir, "de440s.bsp"),
+    extra: [],
+  };
 
-console.log("=== GRAVITY AT CURRENT MOMENT ===");
-console.log("Time:", gravityNow.time);
-console.log("Ship position:", gravityNow.shipPosition.toString());
-console.log("Total acceleration:", gravityNow.totalAcceleration.toString());
+  const {
+    spice,
+    simulator,
+    bodies,
+  } = await buildGravitySimulatorFromSpice({
+    kernelPaths,
+    bodyNames: [
+      "SUN",
+      "MERCURY BARYCENTER",
+      "VENUS BARYCENTER",
+      "EARTH",
+      "MOON",
+      "MARS BARYCENTER",
+      "JUPITER BARYCENTER",
+    ],
+    refFrame: "J2000",
+    observer: "SOLAR SYSTEM BARYCENTER",
+    abcorr: "NONE",
+    softening: 0,
+  });
 
-for (const c of gravityNow.contributions) {
-  console.log(`Body: ${c.body}`);
-  console.log(`  Body position: ${c.bodyPosition.toString()}`);
-  console.log(`  Distance: ${c.distance}`);
-  console.log(`  Acceleration from body: ${c.acceleration.toString()}`);
+  ensureAllBodiesHaveMu(bodies);
+
+  // Example time
+  const et0 = spice.time.utcToEt("2026-04-10T12:00:00 UTC");
+
+  // Example spacecraft state:
+  // near Earth's orbit, heliocentric-ish initial velocity
+  const ship = new SpacecraftState(
+    new Vec3(149_597_870.7 + 20_000, 0, 0),
+    new Vec3(0, 29.8, 0),
+    et0
+  );
+
+  const gravityNow = simulator.getGravityAt(ship.position, ship.time);
+
+  console.log("=== GRAVITY AT CURRENT MOMENT ===");
+  console.log("ET:", gravityNow.time);
+  console.log("UTC:", spice.time.etToUtc(gravityNow.time, "ISOC", 3));
+  console.log("Ship position:", gravityNow.shipPosition.toString());
+  console.log("Total acceleration:", gravityNow.totalAcceleration.toString());
+
+  for (const c of gravityNow.contributions) {
+    console.log(formatContribution(c));
+  }
+
+  const dt = 60;   // seconds
+  const steps = 20;
+
+  const history = simulator.simulateShip(ship, dt, steps);
+
+  console.log("\n=== SHIP TRAJECTORY ===");
+  for (const h of history) {
+    console.log(`Step ${h.step}`);
+    console.log(`  ET: ${h.time}`);
+    console.log(`  UTC: ${spice.time.etToUtc(h.time, "ISOC", 3)}`);
+    console.log(`  Position: ${h.position.toString()}`);
+    console.log(`  Velocity: ${h.velocity.toString()}`);
+    console.log(`  Total acceleration: ${h.totalAcceleration.toString()}`);
+  }
+
+  // Optional cleanup
+  // spice.kernels.clearKernelPool();
 }
 
-// Propagate ship forward
-const dt = 60; // 60 seconds per step
-const steps = 20;
-
-const history = simulator.simulateShip(ship, dt, steps);
-
-console.log("=== SHIP TRAJECTORY ===");
-for (const h of history) {
-  console.log(`Step ${h.step}`);
-  console.log(`  Time: ${h.time}`);
-  console.log(`  Position: ${h.position.toString()}`);
-  console.log(`  Velocity: ${h.velocity.toString()}`);
-  console.log(`  Total acceleration: ${h.totalAcceleration.toString()}`);
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
 }
+
+module.exports = {
+  SpacecraftState,
+  SpiceBody,
+  GravitySimulator,
+  gravityFromBody,
+  gravityBreakdown,
+  totalGravity,
+  stateDerivative,
+  applyDerivative,
+  rk4Step,
+  buildSpiceBodies,
+  buildGravitySimulatorFromSpice,
+  ensureAllBodiesHaveMu,
+  formatContribution,
+};
