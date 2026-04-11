@@ -5,8 +5,8 @@
 }
 
 @font-face {
-  font-family: "Science Gothic";
-  src: url("assets/ScienceGothic.ttf") format("truetype");
+  font-family: "Gunken";
+  src: url("assets/Gunken.otf") format("opentype");
   font-display: swap;
 }
 
@@ -30,8 +30,13 @@
 
 body {
   min-height: 100vh;
+<<<<<<< HEAD
   font-family: "Science Gothic", Arial, Helvetica, sans-serif;
   font-family: "Science Gothic", Arial, Helvetica, sans-serif;
+=======
+  font-family: "Gunken", Arial, Helvetica, sans-serif;
+  letter-spacing: 0.035em;
+>>>>>>> 007d71f (V1)
   background:
     radial-gradient(circle at center, #101a2c 0%, #090d16 45%, #04060b 100%);
   color: white;
@@ -57,8 +62,12 @@ h1 {
   margin-bottom: 16px;
   font-size: 2rem;
   letter-spacing: 1px;
+<<<<<<< HEAD
   font-family: "Legend", "Science Gothic", Arial, sans-serif;
   font-family: "Legend", "Science Gothic", Arial, sans-serif;
+=======
+  font-family: "Legend", "Gunken", Arial, sans-serif;
+>>>>>>> 007d71f (V1)
 }
 
 .controls {
@@ -361,31 +370,58 @@ select {
   margin-top: 0;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
-  gap: 0;
+  gap: 18px;
   overflow: hidden;
 }
 
 .route-output p {
-  overflow: visible;
-  margin-top: 14px;
-  padding: 24px 36px 12px;
-  border-radius: 8px 8px 0 0;
-  background: #aeb5c0;
-  line-height: 1.25;
-  color: #111827;
-  font-size: 0.92rem;
+  display: none;
+}
+
+.route-timeline {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.route-timeline-card {
+  display: grid;
+  gap: 8px;
+  padding: 18px 20px;
+  border-radius: 8px;
+  background: rgba(174, 181, 192, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.route-timeline-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #9fc8ff;
+}
+
+.route-timeline-value {
+  color: #f5f7fb;
+  font-size: 1.12rem;
+  line-height: 1.3;
+}
+
+.route-timeline-meta {
+  color: rgba(223, 235, 255, 0.76);
+  font-size: 0.84rem;
+  line-height: 1.5;
 }
 
 .route-stats {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-auto-rows: minmax(92px, auto);
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(138px, auto);
+  gap: 18px;
   min-height: 0;
-  max-height: 330px;
+  max-height: 520px;
   overflow-y: auto;
-  padding: 8px 36px 36px;
-  border-radius: 0 0 8px 8px;
+  padding: 18px 36px 36px;
+  border-radius: 8px;
   background: #aeb5c0;
 }
 
@@ -393,7 +429,7 @@ select {
   background: #f5f5f3;
   border: 0;
   border-radius: 8px;
-  padding: 10px;
+  padding: 16px 14px 18px;
   min-width: 0;
 }
 
@@ -405,12 +441,13 @@ select {
   font-size: 0.68rem;
   color: #5b6472;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 4px;
+  letter-spacing: 0.11em;
+  margin-bottom: 8px;
 }
 
 .route-stat .value {
-  font-size: 0.9rem;
+  font-size: 1rem;
+  line-height: 1.24;
   color: #111827;
   overflow-wrap: anywhere;
 }
@@ -501,11 +538,11 @@ canvas {
 
   .route-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    padding: 8px 14px 18px;
+    padding: 14px 14px 18px;
   }
 
-  .route-output p {
-    padding: 18px 14px 10px;
+  .route-timeline {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -549,14 +586,14 @@ canvas {
   line-height: 0.95;
   letter-spacing: 0.32em;
   font-weight: 700;
-  font-family: "Legend", "Science Gothic", Arial, sans-serif;
+  font-family: "Legend", "Gunken", Arial, sans-serif;
 }
 
 .mission-brand p {
   margin-top: 10px;
   color: rgba(255, 255, 255, 0.9);
   font-size: clamp(1rem, 1.5vw, 1.25rem);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.05em;
 }
 
 .mission-brand-row {
@@ -577,6 +614,10 @@ canvas {
   flex-wrap: wrap;
   gap: 18px;
   margin-bottom: 16px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 .mission-actions {
@@ -596,7 +637,7 @@ canvas {
   background: #ffd400;
   color: #030711;
   font-size: 0.8rem;
-  letter-spacing: 0;
+  letter-spacing: 0.045em;
   white-space: nowrap;
 }
 
@@ -704,7 +745,7 @@ canvas {
 
 .nav-time-card {
   display: grid;
-  grid-template-columns: minmax(72px, 0.7fr) minmax(0, 1.3fr);
+  grid-template-columns: minmax(64px, 0.5fr) minmax(0, 1.5fr);
   grid-template-rows: auto auto;
   gap: 8px 12px;
   align-items: end;
@@ -722,7 +763,7 @@ canvas {
   color: rgba(255, 255, 255, 0.9);
   font-size: 0.82rem;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.06em;
 }
 
 .mission-control-page input[type="number"],
@@ -826,7 +867,7 @@ canvas {
   font-size: 0.82rem;
   font-weight: 700;
   text-transform: none;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.06em;
   color: rgba(255, 255, 255, 0.92);
 }
 
@@ -844,11 +885,12 @@ canvas {
 }
 
 .sim-time-date {
-  display: none;
+  display: block;
   margin-top: 4px;
   color: rgba(255, 255, 255, 0.56);
   font-size: 0.84rem;
   font-weight: 400;
+  letter-spacing: 0.04em;
   white-space: nowrap;
 }
 
@@ -867,6 +909,7 @@ canvas {
   text-align: center;
   color: #eef6ff;
   font-size: 0.95rem;
+  letter-spacing: 0.04em;
 }
 
 .zoom-controls button {
@@ -904,6 +947,75 @@ canvas {
   margin-top: 0;
 }
 
+.mission-telemetry {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 2;
+  width: min(360px, calc(100vw - 48px));
+  display: grid;
+  gap: 14px;
+  padding: 18px 18px 16px;
+  border-radius: 16px;
+  background: rgba(8, 18, 38, 0.82);
+  border: 1px solid rgba(157, 215, 255, 0.18);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.28);
+}
+
+.mission-telemetry-header {
+  display: grid;
+  gap: 6px;
+}
+
+.mission-telemetry-eyebrow {
+  color: #8ec5ff;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+}
+
+.mission-status-value {
+  color: #f5f8ff;
+  font-size: 1.05rem;
+  line-height: 1.3;
+}
+
+.mission-telemetry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.mission-telemetry-stat {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 12px 10px;
+  border-radius: 12px;
+  background: rgba(174, 181, 192, 0.12);
+}
+
+.mission-telemetry-label {
+  color: rgba(159, 200, 255, 0.88);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.mission-telemetry-value {
+  color: #f4f8ff;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.mission-alert-text {
+  color: rgba(223, 235, 255, 0.82);
+  font-size: 0.84rem;
+  line-height: 1.5;
+}
+
 .mission-control-page canvas {
   display: block;
   flex: 1;
@@ -934,6 +1046,7 @@ canvas {
   margin-top: 0;
   color: rgba(213, 233, 255, 0.72);
   font-size: 0.92rem;
+  letter-spacing: 0.04em;
   pointer-events: none;
 }
 
@@ -1062,7 +1175,7 @@ canvas {
   line-height: 0.96;
   letter-spacing: 0.02em;
   color: #f5f8ff;
-  font-family: "Legend", "Science Gothic", Arial, sans-serif;
+  font-family: "Legend", "Gunken", Arial, sans-serif;
 }
 
 .planet-overview-grid {
@@ -1084,7 +1197,7 @@ canvas {
   margin-bottom: 6px;
   color: #9fc8ff;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.16em;
   font-size: clamp(0.84rem, 1vw, 0.98rem);
 }
 
@@ -1094,6 +1207,7 @@ canvas {
   font-size: clamp(1.05rem, 1.5vw, 1.35rem);
   line-height: 1.38;
   font-weight: 700;
+  letter-spacing: 0.035em;
 }
 
 .planet-overview-stat-size {
@@ -1140,20 +1254,37 @@ canvas {
   height: auto;
   object-fit: contain;
   object-position: center;
-  transform: translateY(-20px);
   filter: drop-shadow(0 28px 42px rgba(0, 0, 0, 0.42));
-  animation: planetOverviewImageIn 0.28s ease;
+  animation: planetOverviewImageIn 0.28s ease, planetOverviewFloat 4.9s ease-in-out infinite 0.28s;
+}
+
+.planet-overview-visual img.is-saturn {
+  width: min(31vw, 470px);
 }
 
 @keyframes planetOverviewImageIn {
   from {
     opacity: 0;
-    transform: scale(0.92);
+    transform: translateY(-20px) scale(0.92);
   }
 
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: translateY(-20px) scale(1);
+  }
+}
+
+@keyframes planetOverviewFloat {
+  0% {
+    transform: translateY(-18px) rotate(-1.8deg);
+  }
+
+  50% {
+    transform: translateY(-40px) rotate(1.8deg);
+  }
+
+  100% {
+    transform: translateY(-18px) rotate(-1.8deg);
   }
 }
 
@@ -1199,6 +1330,17 @@ canvas {
 
   .mission-control-page .mission-canvas-wrap {
     min-height: 70vh;
+  }
+
+  .mission-telemetry {
+    top: 16px;
+    right: 18px;
+    left: 18px;
+    width: auto;
+  }
+
+  .mission-telemetry-grid {
+    grid-template-columns: 1fr;
   }
 
   .canvas-hint {

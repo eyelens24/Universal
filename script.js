@@ -53,6 +53,18 @@ const swapRouteBtn = document.getElementById("swapRouteBtn");
 const planRouteBtn = document.getElementById("planRouteBtn");
 const routeSummary = document.getElementById("routeSummary");
 const routeStats = document.getElementById("routeStats");
+const departureTimerValue = document.getElementById("departureTimerValue");
+const departureTimerMeta = document.getElementById("departureTimerMeta");
+const arrivalTimerValue = document.getElementById("arrivalTimerValue");
+const arrivalTimerMeta = document.getElementById("arrivalTimerMeta");
+const missionStatusValue = document.getElementById("missionStatusValue");
+const telemetryClosestBody = document.getElementById("telemetryClosestBody");
+const telemetryAltitude = document.getElementById("telemetryAltitude");
+const telemetryRelativeSpeed = document.getElementById("telemetryRelativeSpeed");
+const telemetryDominantGravity = document.getElementById("telemetryDominantGravity");
+const telemetrySolarDistance = document.getElementById("telemetrySolarDistance");
+const telemetryShipSpeed = document.getElementById("telemetryShipSpeed");
+const missionAlertText = document.getElementById("missionAlertText");
 const planetInfo = document.getElementById("planetInfo");
 const closePlanetInfoBtn = document.getElementById("closePlanetInfoBtn");
 const planetEndpointBtn = document.getElementById("planetEndpointBtn");
@@ -102,6 +114,8 @@ const planetNames = [
   "NEPTUNE"
 ];
 
+const TELEMETRY_BODY_NAMES = ["SUN", ...planetNames];
+
 const PLANET_INTELLIGENCE = {
   MERCURY: {
     temperature: "-180 C to 430 C",
@@ -148,7 +162,7 @@ const PLANET_IMAGE_PATHS = {
   NEPTUNE: "assets/neptune.png"
 };
 
-const UI_FONT = "\"Science Gothic\", Arial, sans-serif";
+const UI_FONT = "\"Gunken\", Arial, sans-serif";
 
 const PLANET_IMAGE_PATHS = {
   MERCURY: "assets/mercury.png",
@@ -403,10 +417,18 @@ function formatShortDate(date) {
   });
 }
 
+<<<<<<< HEAD
 function formatMapDate(date) {
   return date.toLocaleString([], {
     year: "numeric",
     month: "short",
+=======
+function formatFullDateTime(date) {
+  return date.toLocaleString([], {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+>>>>>>> 007d71f (V1)
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit"
@@ -449,6 +471,246 @@ function formatDoseRate(value) {
 
 function formatRiskLevel(value) {
   return value;
+}
+
+function formatAcceleration(value) {
+  return `${formatNumber(value, 6)} km/s^2`;
+}
+
+function formatPositionAu(position) {
+  return `X ${formatNumber(position.x / AU_KM, 3)} AU, Y ${formatNumber(position.y / AU_KM, 3)} AU, Z ${formatNumber(position.z / AU_KM, 3)} AU`;
+}
+
+function lerp(start, end, t) {
+  return start + (end - start) * t;
+}
+
+function getPolarAngle(position) {
+  return Math.atan2(position.y, position.x);
+}
+
+function unwrapAngleDelta(startAngle, endAngle) {
+  let delta = endAngle - startAngle;
+
+  while (delta <= -Math.PI) delta += Math.PI * 2;
+  while (delta > Math.PI) delta -= Math.PI * 2;
+
+  return delta;
+}
+
+function getTransferArcSample(startPosition, endPosition, t) {
+  const startRadius = Math.max(0.05 * AU_KM, startPosition.norm());
+  const endRadius = Math.max(0.05 * AU_KM, endPosition.norm());
+  const startAngle = getPolarAngle(startPosition);
+  const angleDelta = unwrapAngleDelta(startAngle, getPolarAngle(endPosition));
+  const angle = startAngle + angleDelta * t;
+  const interpolatedRadius = 1 / (lerp(1 / startRadius, 1 / endRadius, t));
+  const z = lerp(startPosition.z, endPosition.z, t);
+
+  return new BrowserVec3(
+    Math.cos(angle) * interpolatedRadius,
+    Math.sin(angle) * interpolatedRadius,
+    z
+  );
+}
+
+function buildTransferArcSamples(startPosition, endPosition, sampleCount = 72) {
+  const samples = [];
+
+  for (let i = 0; i <= sampleCount; i += 1) {
+    samples.push(getTransferArcSample(startPosition, endPosition, i / sampleCount));
+  }
+
+  return samples;
+}
+
+function formatTimerOffset(targetDate, referenceDate, whenPastLabel) {
+  const diffMs = targetDate.getTime() - referenceDate.getTime();
+  const diffDays = Math.abs(diffMs) / DAY_MS;
+
+  if (Math.abs(diffMs) < 60000) {
+    return "Right now";
+  }
+
+  if (diffMs > 0) {
+    return `In ${formatNumber(diffDays, 1)} days`;
+  }
+
+  return whenPastLabel || `${formatNumber(diffDays, 1)} days ago`;
+}
+
+function updateRouteTimeline(plan, simDate = getCurrentSimTime()) {
+  if (!departureTimerValue || !departureTimerMeta || !arrivalTimerValue || !arrivalTimerMeta) {
+    return;
+  }
+
+  if (!plan) {
+    departureTimerValue.textContent = "Waiting for route";
+    departureTimerMeta.textContent = "Generate a route to see the best departure window.";
+    arrivalTimerValue.textContent = "Waiting for route";
+    arrivalTimerMeta.textContent = "Arrival timing will appear after the planner finishes.";
+    return;
+  }
+
+  departureTimerValue.textContent = formatFullDateTime(plan.departureDate);
+  departureTimerMeta.textContent =
+    `${formatTimerOffset(plan.departureDate, simDate, "Departure window has passed")} relative to the current simulation time.`;
+
+  arrivalTimerValue.textContent = formatFullDateTime(plan.arrivalDate);
+  arrivalTimerMeta.textContent =
+    `${formatTimerOffset(plan.arrivalDate, simDate, "Arrival time has passed")} from the current simulation time, after ${formatDays(plan.travelDays)} in transit.`;
+}
+
+function getCurrentMissionState(simDate = getCurrentSimTime()) {
+  return resolveDescriptorState(getCurrentOriginDescriptor(), simDate);
+}
+
+function getBodyStateForTelemetry(name, simDate) {
+  if (name === "SUN") {
+    return {
+      position: new BrowserVec3(0, 0, 0),
+      velocity: new BrowserVec3(0, 0, 0)
+    };
+  }
+
+  return getBodyState(name, simDate);
+}
+
+function getBodyRadiusKm(name) {
+  const info = spice.getBodyInfo(name);
+  if (!info) {
+    return null;
+  }
+
+  if (Number.isFinite(info.radiusKm)) {
+    return info.radiusKm;
+  }
+
+  if (Array.isArray(info.radiiKm) && info.radiiKm.length > 0) {
+    return info.radiiKm.reduce((sum, value) => sum + value, 0) / info.radiiKm.length;
+  }
+
+  return null;
+}
+
+function getClosestBodyTelemetry(state, simDate) {
+  let best = null;
+
+  TELEMETRY_BODY_NAMES.forEach((name) => {
+    const bodyState = getBodyStateForTelemetry(name, simDate);
+    const distanceKm = state.position.sub(bodyState.position).norm();
+    const radiusKm = getBodyRadiusKm(name) || 0;
+    const altitudeKm = distanceKm - radiusKm;
+    const relativeSpeedKmS = state.velocity.sub(bodyState.velocity).norm();
+
+    if (!best || distanceKm < best.distanceKm) {
+      best = {
+        name,
+        distanceKm,
+        altitudeKm,
+        relativeSpeedKmS
+      };
+    }
+  });
+
+  return best;
+}
+
+function getDominantGravityTelemetry(state, simDate) {
+  let best = null;
+
+  TELEMETRY_BODY_NAMES.forEach((name) => {
+    const bodyState = getBodyStateForTelemetry(name, simDate);
+    const radiusKm = Math.max(1, state.position.sub(bodyState.position).norm());
+    const accelerationKmS2 = spice.getBodyInfo(name).GM / (radiusKm * radiusKm);
+
+    if (!best || accelerationKmS2 > best.accelerationKmS2) {
+      best = {
+        name,
+        accelerationKmS2
+      };
+    }
+  });
+
+  return best;
+}
+
+function getMissionSafetyMessage(plan, closestBody) {
+  if (closestBody && closestBody.altitudeKm <= 0) {
+    return {
+      status: "Collision risk critical",
+      alert: `The current ship state intersects ${getPlanetDisplayName(closestBody.name)}. Move the origin away from the body immediately.`
+    };
+  }
+
+  if (closestBody && closestBody.altitudeKm < 50000) {
+    return {
+      status: "Close approach caution",
+      alert: `${getPlanetDisplayName(closestBody.name)} is within ${formatKm(closestBody.altitudeKm)} altitude. Watch approach speed and clearance.`
+    };
+  }
+
+  if (plan && !plan.crewSafe) {
+    return {
+      status: "Crew safety review required",
+      alert: `The current best route is ${plan.crewRadiationRisk.toLowerCase()} with hazards: ${plan.hazardHits.join(", ") || "none listed"}.`
+    };
+  }
+
+  if (plan && plan.crewRadiationRisk === "Elevated") {
+    return {
+      status: "Crew safety elevated",
+      alert: `Crew radiation is elevated at ${formatDose(plan.radiationDoseMsv)}. Safety-first planning is keeping the route inside crew limits where possible.`
+    };
+  }
+
+  return {
+    status: "Crew-safe profile",
+    alert: "Current mission state is within nominal operating margins for crew safety and navigation."
+  };
+}
+
+function updateMissionTelemetry(simDate = getCurrentSimTime()) {
+  if (
+    !missionStatusValue ||
+    !telemetryClosestBody ||
+    !telemetryAltitude ||
+    !telemetryRelativeSpeed ||
+    !telemetryDominantGravity ||
+    !telemetrySolarDistance ||
+    !telemetryShipSpeed ||
+    !missionAlertText
+  ) {
+    return;
+  }
+
+  try {
+    const missionState = getCurrentMissionState(simDate);
+    const closestBody = getClosestBodyTelemetry(missionState, simDate);
+    const dominantGravity = getDominantGravityTelemetry(missionState, simDate);
+    const solarDistanceAu = missionState.position.norm() / AU_KM;
+    const safety = getMissionSafetyMessage(activeRoutePlan, closestBody);
+
+    telemetryClosestBody.textContent = closestBody ? getPlanetDisplayName(closestBody.name) : "Unavailable";
+    telemetryAltitude.textContent = closestBody ? formatKm(Math.max(closestBody.altitudeKm, 0)) : "Unavailable";
+    telemetryRelativeSpeed.textContent = closestBody ? formatDeltaV(closestBody.relativeSpeedKmS) : "Unavailable";
+    telemetryDominantGravity.textContent = dominantGravity
+      ? `${getPlanetDisplayName(dominantGravity.name)} (${formatAcceleration(dominantGravity.accelerationKmS2)})`
+      : "Unavailable";
+    telemetrySolarDistance.textContent = formatAu(solarDistanceAu);
+    telemetryShipSpeed.textContent = formatDeltaV(missionState.velocity.norm());
+    missionStatusValue.textContent = safety.status;
+    missionAlertText.textContent = safety.alert;
+  } catch (error) {
+    telemetryClosestBody.textContent = "Awaiting valid coordinates";
+    telemetryAltitude.textContent = "Awaiting valid coordinates";
+    telemetryRelativeSpeed.textContent = "Awaiting valid coordinates";
+    telemetryDominantGravity.textContent = "Awaiting valid coordinates";
+    telemetrySolarDistance.textContent = "Awaiting valid coordinates";
+    telemetryShipSpeed.textContent = "Awaiting valid coordinates";
+    missionStatusValue.textContent = "Telemetry standing by";
+    missionAlertText.textContent = error.message;
+  }
 }
 
 function canvasToScreen(position, viewState) {
@@ -506,7 +768,7 @@ function getBaseScale(simDate) {
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
   const neptuneState = getBodyState("NEPTUNE", simDate).position.norm();
-  const maxVisualRadius = Math.min(width, height) * 0.42;
+  const maxVisualRadius = Math.min(width, height) * 0.36;
   return maxVisualRadius / neptuneState;
 }
 
@@ -628,19 +890,24 @@ function getPlanetRadius(name) {
     }
   })();
 
-  const zoomBoost = 0.25 + Math.pow(Math.max(zoomLevel, 0.5), 0.95) * 0.75;
-  return clamp(baseRadius * zoomBoost, baseRadius * 0.8, baseRadius * 12);
+  const zoomBoost = 0.14 + Math.pow(Math.max(zoomLevel, 0.5), 0.8) * 0.54;
+  return clamp(baseRadius * zoomBoost, baseRadius * 0.52, baseRadius * 8);
 }
 
 function getSunDisplayRadius(simDate, scale) {
+<<<<<<< HEAD
   void simDate;
   const baseRadius = 16;
   const zoomBoost = 0.32 + Math.pow(Math.max(zoomLevel, 0.5), 0.92) * 0.78;
+=======
+  const baseRadius = 13;
+  const zoomBoost = 0.18 + Math.pow(Math.max(zoomLevel, 0.5), 0.84) * 0.62;
+>>>>>>> 007d71f (V1)
   const mercuryOrbitPx = spice.getBodyInfo("MERCURY").a * AU_KM * scale;
   const desiredRadius = baseRadius * zoomBoost;
-  const maxRadius = Math.max(baseRadius * 0.9, mercuryOrbitPx * 0.32);
+  const maxRadius = Math.max(baseRadius * 0.75, mercuryOrbitPx * 0.22);
 
-  return clamp(desiredRadius, baseRadius * 0.9, maxRadius);
+  return clamp(desiredRadius, baseRadius * 0.7, maxRadius);
 }
 
 function getPlanetDisplayName(name) {
@@ -781,7 +1048,11 @@ function populatePlanetOverview(name, simDate = getCurrentSimTime()) {
   if (planetOverviewImage) {
     planetOverviewImage.src = data.imagePath;
     planetOverviewImage.alt = `${data.displayName} planet render`;
+<<<<<<< HEAD
     planetElements.textContent = data.elementsText;
+=======
+    planetOverviewImage.classList.toggle("is-saturn", name === "SATURN");
+>>>>>>> 007d71f (V1)
   }
   if (planetOverviewImage) {
     planetOverviewImage.src = data.imagePath;
@@ -808,6 +1079,144 @@ function showPlanetInfo(name) {
   });
 }
 
+<<<<<<< HEAD
+=======
+function getMarkerLabel(type) {
+  return type === "origin" ? "Ship" : "Destination";
+}
+
+function drawDraggableMarker(position, viewState, options) {
+  const screenPoint = canvasToScreen(position, viewState);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.fillStyle = options.isDragging ? options.activeColor : options.color;
+  ctx.strokeStyle = "rgba(255,255,255,0.95)";
+  ctx.lineWidth = 2;
+  ctx.arc(screenPoint.x, screenPoint.y, 7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = options.ringColor;
+  ctx.arc(screenPoint.x, screenPoint.y, 14, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.fillStyle = options.textColor;
+  const textX = screenPoint.x + 12;
+  const textY = screenPoint.y + 10;
+  const lines = [options.label, ...(options.detailLines || [])];
+
+  lines.forEach((line, index) => {
+    ctx.font = index === 0 ? `700 12px ${UI_FONT}` : `11px ${UI_FONT}`;
+    ctx.fillText(line, textX, textY + index * 14);
+  });
+
+  return screenPoint;
+}
+
+function drawOriginMarker(simDate, viewState) {
+  const originDescriptor = getCurrentOriginDescriptor();
+  const originState = resolveDescriptorState(originDescriptor, simDate);
+
+  return drawDraggableMarker(originState.position, viewState, {
+    label: getMarkerLabel("origin"),
+    detailLines: [
+      `From: ${originDescriptor.label}`,
+      `${formatNumber(originState.position.x / AU_KM, 2)}, ${formatNumber(originState.position.y / AU_KM, 2)} AU`
+    ],
+    color: "#80ffce",
+    activeColor: "#8ec5ff",
+    ringColor: "rgba(128, 255, 206, 0.55)",
+    textColor: "#d8fff1",
+    isDragging: dragTarget === "origin"
+  });
+}
+
+function drawDestinationMarker(simDate, viewState) {
+  const destinationDescriptor = getCurrentDestinationDescriptor();
+  const destinationState = resolveDescriptorState(destinationDescriptor, simDate);
+
+  return drawDraggableMarker(destinationState.position, viewState, {
+    label: getMarkerLabel("destination"),
+    detailLines: [
+      `To: ${destinationDescriptor.label}`,
+      `${formatNumber(destinationState.position.x / AU_KM, 2)}, ${formatNumber(destinationState.position.y / AU_KM, 2)} AU`
+    ],
+    color: "#ffd166",
+    activeColor: "#ffc98d",
+    ringColor: "rgba(255, 209, 102, 0.55)",
+    textColor: "#fff0c2",
+    isDragging: dragTarget === "destination"
+  });
+}
+
+function drawPlannedTransferMarkers(viewState) {
+  if (!activeRoutePlan?.departureState || !activeRoutePlan?.arrivalState) {
+    return;
+  }
+
+  drawDraggableMarker(activeRoutePlan.departureState.position, viewState, {
+    label: "Best Depart",
+    detailLines: [
+      formatShortDate(activeRoutePlan.departureDate),
+      `From ${activeRoutePlan.originDescriptor.label}`
+    ],
+    color: "#8ef7ff",
+    activeColor: "#8ef7ff",
+    ringColor: "rgba(142, 247, 255, 0.48)",
+    textColor: "#d9fbff",
+    isDragging: false
+  });
+
+  drawDraggableMarker(activeRoutePlan.arrivalState.position, viewState, {
+    label: "Arrival",
+    detailLines: [
+      formatShortDate(activeRoutePlan.arrivalDate),
+      `At ${activeRoutePlan.destinationDescriptor.label}`
+    ],
+    color: "#ffb570",
+    activeColor: "#ffb570",
+    ringColor: "rgba(255, 181, 112, 0.48)",
+    textColor: "#ffe6cb",
+    isDragging: false
+  });
+}
+
+function drawRouteOverlay(simDate, centerX, centerY, scale) {
+  if (!activeRoutePlan) {
+    return;
+  }
+
+  const pathSamples = buildTransferArcSamples(
+    activeRoutePlan.departureState.position,
+    activeRoutePlan.arrivalState.position,
+    64
+  );
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.setLineDash([10, 8]);
+  ctx.strokeStyle = activeRoutePlan.feasible ? "rgba(120, 255, 206, 0.95)" : "rgba(255, 176, 120, 0.95)";
+  ctx.lineWidth = 2.5;
+  pathSamples.forEach((sample, index) => {
+    const x = centerX + sample.x * scale;
+    const y = centerY + sample.y * scale;
+
+    if (index === 0) {
+      ctx.moveTo(x, y);
+      return;
+    }
+
+    ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+  ctx.restore();
+}
+
+>>>>>>> 007d71f (V1)
 function getPlanetDrawData(name, simDate, scale) {
   const state = getBodyState(name, simDate);
   const info = spice.getBodyInfo(name);
@@ -876,13 +1285,11 @@ function resolveDescriptorState(descriptor, date) {
 }
 
 function estimateHazardAlongRoute(startPosition, endPosition) {
-  const samples = 24;
+  const samples = buildTransferArcSamples(startPosition, endPosition, 24);
   let score = 0;
   const hits = new Set();
 
-  for (let i = 0; i <= samples; i += 1) {
-    const t = i / samples;
-    const sample = startPosition.add(endPosition.sub(startPosition).scale(t));
+  for (const sample of samples) {
     const radiusAu = sample.norm() / AU_KM;
 
     if (radiusAu >= 2.05 && radiusAu <= 3.35) {
@@ -906,15 +1313,19 @@ function estimateHazardAlongRoute(startPosition, endPosition) {
 }
 
 function estimateRadiationAlongRoute(startPosition, endPosition, travelDays) {
-  const samples = 72;
+  const samples = buildTransferArcSamples(startPosition, endPosition, 72);
   let totalDoseRateMsvPerDay = 0;
   let peakDoseRateMsvPerDay = 0;
   let closestRadiusAu = Number.POSITIVE_INFINITY;
   const missionDoseLimitMsv = getCrewMissionDoseLimitMsv(travelDays);
 
+<<<<<<< HEAD
   for (let i = 0; i <= samples; i += 1) {
     const t = i / samples;
     const sample = interpolateCrewSafeRoutePosition(startPosition, endPosition, t);
+=======
+  for (const sample of samples) {
+>>>>>>> 007d71f (V1)
     const radiusAu = Math.max(0.05, sample.norm() / AU_KM);
     closestRadiusAu = Math.min(closestRadiusAu, radiusAu);
 
@@ -923,7 +1334,7 @@ function estimateRadiationAlongRoute(startPosition, endPosition, travelDays) {
     peakDoseRateMsvPerDay = Math.max(peakDoseRateMsvPerDay, doseRateMsvPerDay);
   }
 
-  const averageDoseRateMsvPerDay = totalDoseRateMsvPerDay / (samples + 1);
+  const averageDoseRateMsvPerDay = totalDoseRateMsvPerDay / samples.length;
   const totalDoseMsv = averageDoseRateMsvPerDay * Math.max(0.1, travelDays);
   const doseLimitRatio = totalDoseMsv / missionDoseLimitMsv;
   const peakLimitRatio = peakDoseRateMsvPerDay / PEAK_DOSE_RATE_LIMIT_MSV_PER_DAY;
@@ -1046,6 +1457,7 @@ function comparePlanCandidates(a, b) {
 
 function getOptimizationPreferences() {
   return {
+    safety: true,
     time: Boolean(preferTimeInput?.checked),
     fuel: Boolean(preferFuelInput?.checked),
     radiation: true
@@ -1053,11 +1465,16 @@ function getOptimizationPreferences() {
 }
 
 function ensureAtLeastOnePreference(preferences) {
+<<<<<<< HEAD
   if (preferences.time || preferences.fuel) {
+=======
+  if (preferences.safety || preferences.time || preferences.fuel || preferences.radiation) {
+>>>>>>> 007d71f (V1)
     return preferences;
   }
 
   return {
+    safety: true,
     time: true,
     fuel: true,
     radiation: true
@@ -1079,11 +1496,24 @@ function getRouteScore(candidate, metrics, preferences) {
     score += candidate.fuelRequiredKg / Math.max(metrics.maxFuelRequiredKg, 1);
   }
 
+  if (preferences.safety) {
+    score += candidate.hazardScore * 0.55;
+    score += Math.max(0, candidate.arrivalSpeedKmS - 12) * 0.3;
+    score += Math.max(0, 0.85 - (candidate.closestSunRadiusAu ?? 1)) * 18;
+    score += Math.max(0, (candidate.radiationDoseLimitRatio ?? 0) - 0.55) * 8;
+    score += Math.max(0, (candidate.radiationPeakLimitRatio ?? 0) - 0.55) * 6;
+
+    if (!candidate.crewSafe) {
+      score += 40;
+    }
+  }
+
   return score;
 }
 
 function summarizePreferenceText(preferences) {
   const active = [];
+  if (preferences.safety) active.push("crew safety");
   if (preferences.time) active.push("shortest travel time");
   if (preferences.fuel) active.push("fuel");
   return active.join(", ");
@@ -1623,8 +2053,11 @@ function departureBurnLabel(originVelocity, transitVelocity) {
 }
 
 function renderRouteStats(plan) {
+  updateRouteTimeline(plan);
+
   const stats = plan
     ? [
+        { label: "Crew Safety First", value: plan.preferences.safety ? "Enabled" : "Optional" },
         { label: "Best Time To Leave", value: formatShortDate(plan.departureDate) },
         { label: "Destination Arrival", value: formatShortDate(plan.arrivalDate) },
         { label: "Selected Priorities", value: summarizePreferenceText(plan.preferences) || "crew-safe route" },
@@ -2052,12 +2485,15 @@ function drawSolarSystem(simDate) {
   ctx.arc(centerX, centerY, sunRadius, 0, Math.PI * 2);
   ctx.fill();
 
+<<<<<<< HEAD
   ctx.fillStyle = "white";
   ctx.font = `700 14px ${UI_FONT}`;
   ctx.fillText("Sun", centerX - Math.max(14, sunRadius * 0.9), centerY - (sunRadius + 12));
   ctx.font = `700 14px ${UI_FONT}`;
   ctx.fillText("Sun", centerX - Math.max(14, sunRadius * 0.9), centerY - (sunRadius + 12));
 
+=======
+>>>>>>> 007d71f (V1)
   lastPlanetHitTargets = [];
   planetNames.forEach((name) => {
     const planet = getPlanetDrawData(name, simDate, scale);
@@ -2098,6 +2534,7 @@ function drawSolarSystem(simDate) {
   });
 
   drawRouteOverlay(simDate, centerX, centerY, scale);
+  drawPlannedTransferMarkers(viewState);
   drawOriginMarker(simDate, viewState);
   drawDestinationMarker(simDate, viewState);
 }
@@ -2128,6 +2565,12 @@ function updateUI(simDate) {
     populatePlanetOverview(selectedPlanetName, simDate);
     populatePlanetOverview(selectedPlanetName, simDate);
   }
+
+  if (activeRoutePlan) {
+    updateRouteTimeline(activeRoutePlan, simDate);
+  }
+
+  updateMissionTelemetry(simDate);
 }
 
 function animate() {
@@ -2320,6 +2763,28 @@ planRouteBtn.addEventListener("click", () => {
   queueRoutePlan({
     pendingSummary: "Calculating the best crew-safe route...",
     statusText: "Optimized route updated."
+  });
+});
+
+[
+  originMode,
+  originBody,
+  destinationMode,
+  destinationBody,
+  dryMassInput,
+  fuelMassInput,
+  ispInput,
+  preferTimeInput,
+  preferFuelInput,
+  originCustomX,
+  originCustomY,
+  originCustomZ,
+  destinationCustomX,
+  destinationCustomY,
+  destinationCustomZ
+].forEach((control) => {
+  control?.addEventListener("change", () => {
+    scheduleRoutePlanUpdate("Route guidance refreshed.");
   });
 });
 
