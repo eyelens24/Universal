@@ -56,14 +56,12 @@ const departureTimerValue = document.getElementById("departureTimerValue");
 const departureTimerMeta = document.getElementById("departureTimerMeta");
 const arrivalTimerValue = document.getElementById("arrivalTimerValue");
 const arrivalTimerMeta = document.getElementById("arrivalTimerMeta");
-const missionStatusValue = document.getElementById("missionStatusValue");
-const telemetryClosestBody = document.getElementById("telemetryClosestBody");
-const telemetryAltitude = document.getElementById("telemetryAltitude");
-const telemetryRelativeSpeed = document.getElementById("telemetryRelativeSpeed");
-const telemetryDominantGravity = document.getElementById("telemetryDominantGravity");
-const telemetrySolarDistance = document.getElementById("telemetrySolarDistance");
-const telemetryShipSpeed = document.getElementById("telemetryShipSpeed");
-const missionAlertText = document.getElementById("missionAlertText");
+const asteroidRiskValue = document.getElementById("asteroidRiskValue");
+const asteroidTrackedValue = document.getElementById("asteroidTrackedValue");
+const asteroidClosestValue = document.getElementById("asteroidClosestValue");
+const asteroidApproachValue = document.getElementById("asteroidApproachValue");
+const asteroidTimeValue = document.getElementById("asteroidTimeValue");
+const asteroidAlertText = document.getElementById("asteroidAlertText");
 const planetInfo = document.getElementById("planetInfo");
 const closePlanetInfoBtn = document.getElementById("closePlanetInfoBtn");
 const planetEndpointBtn = document.getElementById("planetEndpointBtn");
@@ -98,6 +96,9 @@ const DEEP_SPACE_GCR_MSV_PER_DAY = 1.8;
 const NOMINAL_SOLAR_PARTICLE_MSV_PER_DAY_AT_1_AU = 0.08;
 const PEAK_DOSE_RATE_LIMIT_MSV_PER_DAY = 25;
 const MIN_CREW_SAFE_SOLAR_DISTANCE_AU = 0.7;
+const ASTEROID_COLLISION_DISTANCE_KM = 120000;
+const ASTEROID_WARNING_DISTANCE_KM = 1200000;
+const ASTEROID_TRAJECTORY_SAMPLE_COUNT = 96;
 
 const planetNames = [
   "MERCURY",
@@ -109,8 +110,6 @@ const planetNames = [
   "URANUS",
   "NEPTUNE"
 ];
-
-const TELEMETRY_BODY_NAMES = ["SUN", ...planetNames];
 
 const PLANET_INTELLIGENCE = {
   MERCURY: {
@@ -181,38 +180,49 @@ let isPlanningRoute = false;
 let selectedPlanetName = null;
 let pointerMovedDuringDrag = false;
 let lastPlanetHitTargets = [];
+let lastRouteTurnHitTargets = [];
+let lastAsteroidRiskHitTarget = null;
+let activeRouteTurn = null;
+let hoveredAsteroidRisk = false;
+let suppressNextCanvasClick = false;
 let planetOverviewTimer = null;
 
-const asteroidImg = new Image();
-asteroidImg.src = "assets/asteroid.png";
-
+const planetImageCache = new Map();
 Object.values(PLANET_IMAGE_PATHS).forEach((path) => {
   const image = new Image();
   image.src = path;
+  planetImageCache.set(path, image);
+  if (typeof image.decode === "function") {
+    image.decode().catch(() => {});
+  }
 });
 
-const asteroidBeltInner = 180;
-const asteroidBeltOuter = 205;
-const asteroidCount = 140;
+const asteroidBeltInnerAu = 2.15;
+const asteroidBeltOuterAu = 3.35;
+const asteroidCount = 320;
 const asteroids = [];
 const stars = [];
 let canvasResizeFrame = null;
 let canvasResizeObserver = null;
 let canvasResizeTimeout = null;
+let planetFocusFrame = null;
 
 function createAsteroids() {
   asteroids.length = 0;
 
   for (let i = 0; i < asteroidCount; i += 1) {
-    const orbitRadius = asteroidBeltInner + Math.random() * (asteroidBeltOuter - asteroidBeltInner);
+    const orbitRadiusAu = asteroidBeltInnerAu + Math.random() * (asteroidBeltOuterAu - asteroidBeltInnerAu);
     const baseAngle = Math.random() * Math.PI * 2;
-    const orbitalPeriod = 1000 + Math.random() * 2200;
-    const size = 4 + Math.random() * 8;
+    const orbitalPeriodDays = 365.25 * Math.sqrt(orbitRadiusAu ** 3);
+    const inclinationRad = (Math.random() - 0.5) * 0.16;
+    const size = 1.2 + Math.random() * 2.6;
 
     asteroids.push({
-      orbitRadius,
+      id: `A-${String(i + 1).padStart(3, "0")}`,
+      orbitRadiusAu,
       baseAngle,
-      orbitalPeriod,
+      orbitalPeriodDays,
+      inclinationRad,
       size
     });
   }
@@ -317,6 +327,12 @@ function setPlannerOpen(isOpen) {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function easeInOutCubic(t) {
+  return t < 0.5
+    ? 4 * t * t * t
+    : 1 - ((-2 * t + 2) ** 3) / 2;
 }
 
 function updateZoomDisplay() {
@@ -439,6 +455,45 @@ function buildTransferArcSamples(startPosition, endPosition, sampleCount = 72) {
   return samples;
 }
 
+function interpolateVector(start, end, t) {
+  return new BrowserVec3(
+    lerp(start.x, end.x, t),
+    lerp(start.y, end.y, t),
+    lerp(start.z, end.z, t)
+  );
+}
+
+function buildPropagatedTrajectorySamples(departureState, transitVelocity, transferSeconds, sampleCount = 96) {
+  const samples = [];
+  const stepCount = clamp(Math.round(transferSeconds / (DAY_SECONDS * 5)), 36, 220);
+
+  for (let i = 0; i <= sampleCount; i += 1) {
+    const t = i / sampleCount;
+    const elapsedSeconds = transferSeconds * t;
+    const state = i === 0
+      ? {
+          position: departureState.position,
+          velocity: transitVelocity
+        }
+      : propagateBallisticState(
+          {
+            position: departureState.position,
+            velocity: transitVelocity
+          },
+          elapsedSeconds,
+          Math.max(1, Math.round(stepCount * t))
+        );
+
+    samples.push({
+      t,
+      position: state.position,
+      velocity: state.velocity
+    });
+  }
+
+  return samples;
+}
+
 function formatTimerOffset(targetDate, referenceDate, whenPastLabel) {
   const diffMs = targetDate.getTime() - referenceDate.getTime();
   const diffDays = Math.abs(diffMs) / DAY_MS;
@@ -476,158 +531,6 @@ function updateRouteTimeline(plan, simDate = getCurrentSimTime()) {
     `${formatTimerOffset(plan.arrivalDate, simDate, "Arrival time has passed")} from the current simulation time, after ${formatDays(plan.travelDays)} in transit.`;
 }
 
-function getCurrentMissionState(simDate = getCurrentSimTime()) {
-  return resolveDescriptorState(getCurrentOriginDescriptor(), simDate);
-}
-
-function getBodyStateForTelemetry(name, simDate) {
-  if (name === "SUN") {
-    return {
-      position: new BrowserVec3(0, 0, 0),
-      velocity: new BrowserVec3(0, 0, 0)
-    };
-  }
-
-  return getBodyState(name, simDate);
-}
-
-function getBodyRadiusKm(name) {
-  const info = spice.getBodyInfo(name);
-  if (!info) {
-    return null;
-  }
-
-  if (Number.isFinite(info.radiusKm)) {
-    return info.radiusKm;
-  }
-
-  if (Array.isArray(info.radiiKm) && info.radiiKm.length > 0) {
-    return info.radiiKm.reduce((sum, value) => sum + value, 0) / info.radiiKm.length;
-  }
-
-  return null;
-}
-
-function getClosestBodyTelemetry(state, simDate) {
-  let best = null;
-
-  TELEMETRY_BODY_NAMES.forEach((name) => {
-    const bodyState = getBodyStateForTelemetry(name, simDate);
-    const distanceKm = state.position.sub(bodyState.position).norm();
-    const radiusKm = getBodyRadiusKm(name) || 0;
-    const altitudeKm = distanceKm - radiusKm;
-    const relativeSpeedKmS = state.velocity.sub(bodyState.velocity).norm();
-
-    if (!best || distanceKm < best.distanceKm) {
-      best = {
-        name,
-        distanceKm,
-        altitudeKm,
-        relativeSpeedKmS
-      };
-    }
-  });
-
-  return best;
-}
-
-function getDominantGravityTelemetry(state, simDate) {
-  let best = null;
-
-  TELEMETRY_BODY_NAMES.forEach((name) => {
-    const bodyState = getBodyStateForTelemetry(name, simDate);
-    const radiusKm = Math.max(1, state.position.sub(bodyState.position).norm());
-    const accelerationKmS2 = spice.getBodyInfo(name).GM / (radiusKm * radiusKm);
-
-    if (!best || accelerationKmS2 > best.accelerationKmS2) {
-      best = {
-        name,
-        accelerationKmS2
-      };
-    }
-  });
-
-  return best;
-}
-
-function getMissionSafetyMessage(plan, closestBody) {
-  if (closestBody && closestBody.altitudeKm <= 0) {
-    return {
-      status: "Collision risk critical",
-      alert: `The current ship state intersects ${getPlanetDisplayName(closestBody.name)}. Move the origin away from the body immediately.`
-    };
-  }
-
-  if (closestBody && closestBody.altitudeKm < 50000) {
-    return {
-      status: "Close approach caution",
-      alert: `${getPlanetDisplayName(closestBody.name)} is within ${formatKm(closestBody.altitudeKm)} altitude. Watch approach speed and clearance.`
-    };
-  }
-
-  if (plan && !plan.crewSafe) {
-    return {
-      status: "Crew safety review required",
-      alert: `The current best route is ${plan.crewRadiationRisk.toLowerCase()} with hazards: ${plan.hazardHits.join(", ") || "none listed"}.`
-    };
-  }
-
-  if (plan && plan.crewRadiationRisk === "Elevated") {
-    return {
-      status: "Crew safety elevated",
-      alert: `Crew radiation is elevated at ${formatDose(plan.radiationDoseMsv)}. Safety-first planning is keeping the route inside crew limits where possible.`
-    };
-  }
-
-  return {
-    status: "Crew-safe profile",
-    alert: "Current mission state is within nominal operating margins for crew safety and navigation."
-  };
-}
-
-function updateMissionTelemetry(simDate = getCurrentSimTime()) {
-  if (
-    !missionStatusValue ||
-    !telemetryClosestBody ||
-    !telemetryAltitude ||
-    !telemetryRelativeSpeed ||
-    !telemetryDominantGravity ||
-    !telemetrySolarDistance ||
-    !telemetryShipSpeed ||
-    !missionAlertText
-  ) {
-    return;
-  }
-
-  try {
-    const missionState = getCurrentMissionState(simDate);
-    const closestBody = getClosestBodyTelemetry(missionState, simDate);
-    const dominantGravity = getDominantGravityTelemetry(missionState, simDate);
-    const solarDistanceAu = missionState.position.norm() / AU_KM;
-    const safety = getMissionSafetyMessage(activeRoutePlan, closestBody);
-
-    telemetryClosestBody.textContent = closestBody ? getPlanetDisplayName(closestBody.name) : "Unavailable";
-    telemetryAltitude.textContent = closestBody ? formatKm(Math.max(closestBody.altitudeKm, 0)) : "Unavailable";
-    telemetryRelativeSpeed.textContent = closestBody ? formatDeltaV(closestBody.relativeSpeedKmS) : "Unavailable";
-    telemetryDominantGravity.textContent = dominantGravity
-      ? `${getPlanetDisplayName(dominantGravity.name)} (${formatAcceleration(dominantGravity.accelerationKmS2)})`
-      : "Unavailable";
-    telemetrySolarDistance.textContent = formatAu(solarDistanceAu);
-    telemetryShipSpeed.textContent = formatDeltaV(missionState.velocity.norm());
-    missionStatusValue.textContent = safety.status;
-    missionAlertText.textContent = safety.alert;
-  } catch (error) {
-    telemetryClosestBody.textContent = "Awaiting valid coordinates";
-    telemetryAltitude.textContent = "Awaiting valid coordinates";
-    telemetryRelativeSpeed.textContent = "Awaiting valid coordinates";
-    telemetryDominantGravity.textContent = "Awaiting valid coordinates";
-    telemetrySolarDistance.textContent = "Awaiting valid coordinates";
-    telemetryShipSpeed.textContent = "Awaiting valid coordinates";
-    missionStatusValue.textContent = "Telemetry standing by";
-    missionAlertText.textContent = error.message;
-  }
-}
-
 function canvasToScreen(position, viewState) {
   return {
     x: viewState.centerX + position.x * viewState.scale,
@@ -651,7 +554,7 @@ function getPointerPosition(event) {
   };
 }
 
-function pointHitsMarker(pointer, marker, label) {
+function pointHitsMarker(pointer, marker, label, includeLabel = true) {
   const markerRadius = 24;
   const labelWidth = Math.max(42, label.length * 7 + 10);
   const labelRect = {
@@ -662,6 +565,7 @@ function pointHitsMarker(pointer, marker, label) {
   };
   const withinMarker = Math.hypot(pointer.x - marker.x, pointer.y - marker.y) <= markerRadius;
   const withinLabel =
+    includeLabel &&
     pointer.x >= labelRect.left &&
     pointer.x <= labelRect.right &&
     pointer.y >= labelRect.top &&
@@ -673,10 +577,10 @@ function pointHitsMarker(pointer, marker, label) {
 
   const labelCenterX = (labelRect.left + labelRect.right) / 2;
   const labelCenterY = (labelRect.top + labelRect.bottom) / 2;
-  return Math.min(
-    Math.hypot(pointer.x - marker.x, pointer.y - marker.y),
-    Math.hypot(pointer.x - labelCenterX, pointer.y - labelCenterY)
-  );
+  const markerDistance = Math.hypot(pointer.x - marker.x, pointer.y - marker.y);
+  return includeLabel
+    ? Math.min(markerDistance, Math.hypot(pointer.x - labelCenterX, pointer.y - labelCenterY))
+    : markerDistance;
 }
 
 function getBaseScale(simDate) {
@@ -740,11 +644,118 @@ function drawBackgroundStars(viewState) {
   });
 }
 
-function drawAsteroidBelt(simDate, viewState) {
+function getAsteroidState(asteroid, simDate) {
   const et = spice.time.dateToEt(simDate);
   const days = et / DAY_SECONDS;
-  const beltRadius = ((asteroidBeltInner + asteroidBeltOuter) / 2) * zoomLevel;
-  const beltThickness = Math.max(8, 20 * zoomLevel);
+  const angle = asteroid.baseAngle + (days / asteroid.orbitalPeriodDays) * Math.PI * 2;
+  const radiusKm = asteroid.orbitRadiusAu * AU_KM;
+  const periodSeconds = asteroid.orbitalPeriodDays * DAY_SECONDS;
+  const speedKmS = (Math.PI * 2 * radiusKm) / periodSeconds;
+  const cosAngle = Math.cos(angle);
+  const sinAngle = Math.sin(angle);
+  const zScale = Math.sin(asteroid.inclinationRad);
+
+  return {
+    asteroid,
+    angle,
+    position: new BrowserVec3(
+      cosAngle * radiusKm,
+      sinAngle * radiusKm,
+      sinAngle * radiusKm * zScale
+    ),
+    velocity: new BrowserVec3(
+      -sinAngle * speedKmS,
+      cosAngle * speedKmS,
+      cosAngle * speedKmS * zScale
+    )
+  };
+}
+
+function getRoutePositionAt(plan, t) {
+  if (Array.isArray(plan.trajectorySamples) && plan.trajectorySamples.length > 1) {
+    const clampedT = clamp(t, 0, 1);
+    let previous = plan.trajectorySamples[0];
+
+    for (let i = 1; i < plan.trajectorySamples.length; i += 1) {
+      const next = plan.trajectorySamples[i];
+      if (clampedT <= next.t) {
+        const localT = (clampedT - previous.t) / Math.max(0.000001, next.t - previous.t);
+        return interpolateVector(previous.position, next.position, localT);
+      }
+      previous = next;
+    }
+
+    return plan.trajectorySamples[plan.trajectorySamples.length - 1].position;
+  }
+
+  return getTransferArcSample(
+    plan.departureState.position,
+    plan.arrivalState.position,
+    clamp(t, 0, 1)
+  );
+}
+
+function scanAsteroidTrajectoryRisk(plan) {
+  if (!plan?.departureDate || !plan?.arrivalDate) {
+    return null;
+  }
+
+  const routeDurationMs = plan.arrivalDate.getTime() - plan.departureDate.getTime();
+  if (!(routeDurationMs > 0)) {
+    return null;
+  }
+
+  let closest = null;
+  let warningCount = 0;
+  let collisionCount = 0;
+
+  for (let i = 0; i <= ASTEROID_TRAJECTORY_SAMPLE_COUNT; i += 1) {
+    const t = i / ASTEROID_TRAJECTORY_SAMPLE_COUNT;
+    const sampleDate = new Date(plan.departureDate.getTime() + routeDurationMs * t);
+    const shipPosition = getRoutePositionAt(plan, t);
+
+    asteroids.forEach((asteroid) => {
+      const asteroidState = getAsteroidState(asteroid, sampleDate);
+      const distanceKm = shipPosition.sub(asteroidState.position).norm();
+
+      if (distanceKm <= ASTEROID_WARNING_DISTANCE_KM) {
+        warningCount += 1;
+      }
+      if (distanceKm <= ASTEROID_COLLISION_DISTANCE_KM) {
+        collisionCount += 1;
+      }
+      if (!closest || distanceKm < closest.distanceKm) {
+        closest = {
+          asteroidId: asteroid.id,
+          asteroid,
+          distanceKm,
+          date: sampleDate,
+          routeT: t,
+          shipPosition,
+          asteroidPosition: asteroidState.position
+        };
+      }
+    });
+  }
+
+  return {
+    trackedCount: asteroids.length,
+    warningCount,
+    collisionCount,
+    closest,
+    riskLevel: collisionCount > 0
+      ? "collision"
+      : warningCount > 0
+        ? "warning"
+        : "clear"
+  };
+}
+
+function drawAsteroidBelt(simDate, viewState) {
+  const beltInnerRadius = asteroidBeltInnerAu * AU_KM * viewState.scale;
+  const beltOuterRadius = asteroidBeltOuterAu * AU_KM * viewState.scale;
+  const beltRadius = (beltInnerRadius + beltOuterRadius) / 2;
+  const beltThickness = Math.max(8, beltOuterRadius - beltInnerRadius);
 
   ctx.beginPath();
   ctx.strokeStyle = "rgba(200, 180, 150, 0.08)";
@@ -752,32 +763,120 @@ function drawAsteroidBelt(simDate, viewState) {
   ctx.arc(viewState.centerX, viewState.centerY, beltRadius, 0, Math.PI * 2);
   ctx.stroke();
 
-  asteroids.forEach((asteroid) => {
-    const angle = asteroid.baseAngle + (days / asteroid.orbitalPeriod) * Math.PI * 2;
-    const orbitRadius = asteroid.orbitRadius * zoomLevel;
-    const x = viewState.centerX + Math.cos(angle) * orbitRadius;
-    const y = viewState.centerY + Math.sin(angle) * orbitRadius;
-    const size = Math.max(2, asteroid.size * Math.sqrt(zoomLevel));
+  lastAsteroidRiskHitTarget = null;
 
-    if (asteroidImg.complete && asteroidImg.naturalWidth > 0) {
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(angle);
-      ctx.drawImage(
-        asteroidImg,
-        -size / 2,
-        -size / 2,
-        size,
-        size
-      );
-      ctx.restore();
-    } else {
+  asteroids.forEach((asteroid) => {
+    const asteroidState = getAsteroidState(asteroid, simDate);
+    const screenPoint = canvasToScreen(asteroidState.position, viewState);
+    const isClosestRisk = activeRoutePlan?.asteroidRisk?.closest?.asteroidId === asteroid.id;
+    const size = isClosestRisk
+      ? Math.max(3, asteroid.size * Math.sqrt(zoomLevel) * 1.35)
+      : Math.max(1.2, asteroid.size * Math.sqrt(zoomLevel) * 0.62);
+
+    ctx.beginPath();
+    ctx.fillStyle = isClosestRisk ? "#ff5d5d" : "rgba(210, 198, 176, 0.86)";
+    ctx.arc(screenPoint.x, screenPoint.y, size, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (isClosestRisk) {
       ctx.beginPath();
-      ctx.fillStyle = "#9a8f80";
-      ctx.arc(x, y, size * 0.35, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.strokeStyle = "rgba(255, 93, 93, 0.62)";
+      ctx.lineWidth = 1.4;
+      ctx.arc(screenPoint.x, screenPoint.y, size + 6, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = "#071225";
+      ctx.font = `700 ${Math.max(12, size + 7)}px ${UI_FONT}`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("!", screenPoint.x, screenPoint.y + 1);
+      ctx.textAlign = "start";
+      ctx.textBaseline = "alphabetic";
+
+      lastAsteroidRiskHitTarget = {
+        asteroidId: asteroid.id,
+        x: screenPoint.x,
+        y: screenPoint.y,
+        radius: Math.max(14, size + 8),
+        distanceKm: activeRoutePlan?.asteroidRisk?.closest?.distanceKm || 0
+      };
     }
   });
+
+  if (hoveredAsteroidRisk && lastAsteroidRiskHitTarget) {
+    drawAsteroidWarningTooltip(lastAsteroidRiskHitTarget);
+  }
+}
+
+function formatAsteroidRiskTime(date) {
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function getAsteroidRiskStatus(risk) {
+  if (!risk?.closest) {
+    return {
+      title: "Awaiting route",
+      alert: "Plan a route to scan moving asteroid paths for collision risk."
+    };
+  }
+
+  if (risk.riskLevel === "collision") {
+    return {
+      title: "Collision warning",
+      alert: `${risk.closest.asteroidId} intersects the route corridor at ${formatKm(risk.closest.distanceKm)} on ${formatAsteroidRiskTime(risk.closest.date)}. Re-plan before departure.`
+    };
+  }
+
+  if (risk.riskLevel === "warning") {
+    return {
+      title: "Close approach",
+      alert: `${risk.closest.asteroidId} passes within ${formatKm(risk.closest.distanceKm)} of the planned route on ${formatAsteroidRiskTime(risk.closest.date)}. Consider a safer window.`
+    };
+  }
+
+  return {
+    title: "Route clear",
+    alert: `Closest tracked asteroid is ${risk.closest.asteroidId} at ${formatKm(risk.closest.distanceKm)} on ${formatAsteroidRiskTime(risk.closest.date)}.`
+  };
+}
+
+function updateAsteroidMonitor() {
+  if (
+    !asteroidRiskValue ||
+    !asteroidTrackedValue ||
+    !asteroidClosestValue ||
+    !asteroidApproachValue ||
+    !asteroidTimeValue ||
+    !asteroidAlertText
+  ) {
+    return;
+  }
+
+  const risk = activeRoutePlan?.asteroidRisk || null;
+  const status = getAsteroidRiskStatus(risk);
+
+  asteroidRiskValue.textContent = status.title;
+  asteroidTrackedValue.textContent = `${asteroids.length} moving dots`;
+  asteroidClosestValue.textContent = risk?.closest?.asteroidId || "No route";
+  asteroidApproachValue.textContent = risk?.closest
+    ? formatKm(risk.closest.distanceKm)
+    : "No route";
+  asteroidTimeValue.textContent = risk?.closest
+    ? formatAsteroidRiskTime(risk.closest.date)
+    : "No route";
+  asteroidAlertText.textContent = status.alert;
+}
+
+function updateHoveredAsteroidRisk(pointer) {
+  hoveredAsteroidRisk = Boolean(
+    lastAsteroidRiskHitTarget &&
+    Math.hypot(pointer.x - lastAsteroidRiskHitTarget.x, pointer.y - lastAsteroidRiskHitTarget.y) <= lastAsteroidRiskHitTarget.radius
+  );
 }
 
 function getBodyState(name, simDate) {
@@ -864,10 +963,19 @@ function resetPlanetOverviewScroll() {
   }
 }
 
+function cancelPlanetFocusAnimation() {
+  if (planetFocusFrame !== null) {
+    cancelAnimationFrame(planetFocusFrame);
+    planetFocusFrame = null;
+  }
+}
+
 function hidePlanetInfo() {
+  cancelPlanetFocusAnimation();
   clearPlanetOverviewTimer();
   planetInfo?.classList.remove("is-open");
   planetInfo?.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("planet-overview-active");
   resetPlanetOverviewScroll();
 
   planetOverviewTimer = setTimeout(() => {
@@ -898,7 +1006,15 @@ function populatePlanetOverview(name, simDate = getCurrentSimTime()) {
     planetElements.textContent = data.elementsText;
   }
   if (planetOverviewImage) {
-    planetOverviewImage.src = data.imagePath;
+    if (planetOverviewImage.dataset.src !== data.imagePath) {
+      const cachedImage = planetImageCache.get(data.imagePath);
+      if (cachedImage?.complete && cachedImage.naturalWidth > 0) {
+        planetOverviewImage.src = cachedImage.src;
+      } else {
+        planetOverviewImage.src = data.imagePath;
+      }
+      planetOverviewImage.dataset.src = data.imagePath;
+    }
     planetOverviewImage.alt = `${data.displayName} planet render`;
     planetOverviewImage.classList.toggle("is-saturn", name === "SATURN");
   }
@@ -907,7 +1023,12 @@ function populatePlanetOverview(name, simDate = getCurrentSimTime()) {
 function showPlanetInfo(name) {
   clearPlanetOverviewTimer();
   populatePlanetOverview(name);
+  document.body.classList.add("planet-overview-active");
   planetInfo?.classList.remove("hidden");
+  const overviewVisual = planetInfo?.querySelector(".planet-overview-visual");
+  overviewVisual?.style.setProperty("animation", "none");
+  void overviewVisual?.offsetWidth;
+  overviewVisual?.style.removeProperty("animation");
   planetInfo?.setAttribute("aria-hidden", "false");
   resetViewportScroll();
   resetPlanetOverviewScroll();
@@ -918,12 +1039,130 @@ function showPlanetInfo(name) {
   });
 }
 
+function zoomIntoPlanetBeforeOverview(name) {
+  cancelPlanetFocusAnimation();
+
+  const simDate = getCurrentSimTime();
+  const startZoom = zoomLevel;
+  const startOffsetX = cameraOffsetX;
+  const startOffsetY = cameraOffsetY;
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  const bodyState = getBodyState(name, simDate);
+  const targetZoom = clamp(Math.max(zoomLevel * 1.9, 7), 0.35, 25);
+  const targetScale = getBaseScale(simDate) * targetZoom;
+  const targetOffsetX = -bodyState.position.x * targetScale;
+  const targetOffsetY = -bodyState.position.y * targetScale;
+  const durationMs = 620;
+  const startedAt = performance.now();
+
+  activeRouteTurn = null;
+  setStatus(`Zooming in on ${getPlanetDisplayName(name)}.`);
+
+  function step(now) {
+    const progress = clamp((now - startedAt) / durationMs, 0, 1);
+    const eased = easeInOutCubic(progress);
+
+    zoomLevel = lerp(startZoom, targetZoom, eased);
+    cameraOffsetX = lerp(startOffsetX, targetOffsetX, eased);
+    cameraOffsetY = lerp(startOffsetY, targetOffsetY, eased);
+    updateZoomDisplay();
+
+    if (progress < 1) {
+      planetFocusFrame = requestAnimationFrame(step);
+      return;
+    }
+
+    planetFocusFrame = null;
+    cameraOffsetX = targetOffsetX;
+    cameraOffsetY = targetOffsetY;
+    zoomLevel = targetZoom;
+    updateZoomDisplay();
+    showPlanetInfo(name);
+  }
+
+  void width;
+  void height;
+  planetFocusFrame = requestAnimationFrame(step);
+}
+
 function getMarkerLabel(type) {
   return type === "origin" ? "Ship" : "Destination";
 }
 
+function getMarkerLabelBox(screenPoint, lines, options = {}) {
+  const paddingX = 9;
+  const paddingY = 7;
+  const lineHeight = 15;
+  let labelWidth = 0;
+
+  lines.forEach((line, index) => {
+    ctx.font = index === 0 ? `700 12px ${UI_FONT}` : `11px ${UI_FONT}`;
+    labelWidth = Math.max(labelWidth, ctx.measureText(line).width);
+  });
+
+  const width = Math.ceil(labelWidth + paddingX * 2);
+  const height = Math.ceil(lines.length * lineHeight + paddingY * 2 - 3);
+  const side = options.labelSide || "right";
+  const offsetX = options.labelOffsetX ?? 16;
+  const offsetY = options.labelOffsetY ?? -height / 2;
+  let left = side === "left"
+    ? screenPoint.x - width - offsetX
+    : screenPoint.x + offsetX;
+  let top = screenPoint.y + offsetY;
+
+  left = clamp(left, 8, Math.max(8, canvas.clientWidth - width - 8));
+  top = clamp(top, 8, Math.max(8, canvas.clientHeight - height - 8));
+
+  return { left, top, width, height, paddingX, paddingY, lineHeight };
+}
+
+function drawRoundedRectPath(x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+
+  if (typeof ctx.roundRect === "function") {
+    ctx.roundRect(x, y, width, height, r);
+    return;
+  }
+
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+}
+
+function wrapCanvasText(text, maxWidth, font) {
+  ctx.font = font;
+  const words = String(text).split(/\s+/);
+  const lines = [];
+  let currentLine = "";
+
+  words.forEach((word) => {
+    const testLine = currentLine ? `${currentLine} ${word}` : word;
+    if (ctx.measureText(testLine).width <= maxWidth || !currentLine) {
+      currentLine = testLine;
+      return;
+    }
+
+    lines.push(currentLine);
+    currentLine = word;
+  });
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines;
+}
+
 function drawDraggableMarker(position, viewState, options) {
   const screenPoint = canvasToScreen(position, viewState);
+  const lines = [options.label, ...(options.detailLines || [])];
 
   ctx.save();
   ctx.beginPath();
@@ -941,15 +1180,30 @@ function drawDraggableMarker(position, viewState, options) {
   ctx.stroke();
   ctx.restore();
 
+  if (options.showLabel === false) {
+    return screenPoint;
+  }
+
+  ctx.save();
+  const labelBox = getMarkerLabelBox(screenPoint, lines, options);
+  ctx.fillStyle = options.labelBackground || "rgba(5, 13, 28, 0.78)";
+  ctx.strokeStyle = options.labelBorder || options.ringColor;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  drawRoundedRectPath(labelBox.left, labelBox.top, labelBox.width, labelBox.height, 8);
+  ctx.fill();
+  ctx.stroke();
   ctx.fillStyle = options.textColor;
-  const textX = screenPoint.x + 12;
-  const textY = screenPoint.y + 10;
-  const lines = [options.label, ...(options.detailLines || [])];
 
   lines.forEach((line, index) => {
     ctx.font = index === 0 ? `700 12px ${UI_FONT}` : `11px ${UI_FONT}`;
-    ctx.fillText(line, textX, textY + index * 14);
+    ctx.fillText(
+      line,
+      labelBox.left + labelBox.paddingX,
+      labelBox.top + labelBox.paddingY + 11 + index * labelBox.lineHeight
+    );
   });
+  ctx.restore();
 
   return screenPoint;
 }
@@ -968,7 +1222,10 @@ function drawOriginMarker(simDate, viewState) {
     activeColor: "#8ec5ff",
     ringColor: "rgba(128, 255, 206, 0.55)",
     textColor: "#d8fff1",
-    isDragging: dragTarget === "origin"
+    isDragging: dragTarget === "origin",
+    showLabel: false,
+    labelSide: "left",
+    labelOffsetY: -46
   });
 }
 
@@ -986,7 +1243,10 @@ function drawDestinationMarker(simDate, viewState) {
     activeColor: "#ffc98d",
     ringColor: "rgba(255, 209, 102, 0.55)",
     textColor: "#fff0c2",
-    isDragging: dragTarget === "destination"
+    isDragging: dragTarget === "destination",
+    showLabel: destinationDescriptor.mode === "body",
+    labelSide: "right",
+    labelOffsetY: 12
   });
 }
 
@@ -994,6 +1254,10 @@ function drawPlannedTransferMarkers(viewState) {
   if (!activeRoutePlan?.departureState || !activeRoutePlan?.arrivalState) {
     return;
   }
+
+  const departPoint = canvasToScreen(activeRoutePlan.departureState.position, viewState);
+  const arrivalPoint = canvasToScreen(activeRoutePlan.arrivalState.position, viewState);
+  const markersAreClose = Math.hypot(departPoint.x - arrivalPoint.x, departPoint.y - arrivalPoint.y) < 150;
 
   drawDraggableMarker(activeRoutePlan.departureState.position, viewState, {
     label: "Best Depart",
@@ -1005,7 +1269,9 @@ function drawPlannedTransferMarkers(viewState) {
     activeColor: "#8ef7ff",
     ringColor: "rgba(142, 247, 255, 0.48)",
     textColor: "#d9fbff",
-    isDragging: false
+    isDragging: false,
+    labelSide: markersAreClose ? "left" : "right",
+    labelOffsetY: markersAreClose ? -70 : -50
   });
 
   drawDraggableMarker(activeRoutePlan.arrivalState.position, viewState, {
@@ -1018,8 +1284,86 @@ function drawPlannedTransferMarkers(viewState) {
     activeColor: "#ffb570",
     ringColor: "rgba(255, 181, 112, 0.48)",
     textColor: "#ffe6cb",
-    isDragging: false
+    isDragging: false,
+    labelSide: "right",
+    labelOffsetY: markersAreClose ? 18 : 8
   });
+}
+
+function drawRouteTurnPopup(turn, point) {
+  const width = Math.min(320, Math.max(240, lastViewState.width * 0.34));
+  const padding = 12;
+  const titleFont = `700 13px ${UI_FONT}`;
+  const metaFont = `11px ${UI_FONT}`;
+  const copyFont = `11px ${UI_FONT}`;
+  const copyLines = wrapCanvasText(turn.summary, width - padding * 2, copyFont);
+  const height = padding * 2 + 16 + 17 + copyLines.length * 15 + 6;
+  let left = point.x + 18;
+  let top = point.y - height - 12;
+
+  left = clamp(left, 10, Math.max(10, lastViewState.width - width - 10));
+  top = clamp(top, 10, Math.max(10, lastViewState.height - height - 10));
+
+  ctx.save();
+  ctx.fillStyle = "rgba(5, 13, 28, 0.92)";
+  ctx.strokeStyle = "rgba(157, 215, 255, 0.72)";
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  drawRoundedRectPath(left, top, width, height, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#9dd7ff";
+  ctx.font = metaFont;
+  ctx.fillText(`Turn ${turn.label} - ${formatShortDate(turn.date)}`, left + padding, top + padding + 10);
+
+  ctx.fillStyle = "#f5f8ff";
+  ctx.font = titleFont;
+  ctx.fillText(turn.title, left + padding, top + padding + 28);
+
+  ctx.fillStyle = "rgba(223, 235, 255, 0.88)";
+  ctx.font = copyFont;
+  copyLines.forEach((line, index) => {
+    ctx.fillText(line, left + padding, top + padding + 50 + index * 15);
+  });
+  ctx.restore();
+}
+
+function drawAsteroidWarningTooltip(target) {
+  const lines = [
+    "Asteroid Collision",
+    `${target.asteroidId} intersects the route corridor`,
+    `Closest approach: ${formatKm(target.distanceKm)}`
+  ];
+  const labelBox = getMarkerLabelBox(
+    { x: target.x, y: target.y },
+    lines,
+    {
+      labelSide: "left",
+      labelOffsetX: 18,
+      labelOffsetY: -58
+    }
+  );
+
+  ctx.save();
+  ctx.fillStyle = "rgba(5, 13, 28, 0.9)";
+  ctx.strokeStyle = "rgba(255, 93, 93, 0.82)";
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  drawRoundedRectPath(labelBox.left, labelBox.top, labelBox.width, labelBox.height, 8);
+  ctx.fill();
+  ctx.stroke();
+  ctx.fillStyle = "#ffd6d6";
+
+  lines.forEach((line, index) => {
+    ctx.font = index === 0 ? `700 12px ${UI_FONT}` : `11px ${UI_FONT}`;
+    ctx.fillText(
+      line,
+      labelBox.left + labelBox.paddingX,
+      labelBox.top + labelBox.paddingY + 11 + index * labelBox.lineHeight
+    );
+  });
+  ctx.restore();
 }
 
 function drawRouteOverlay(simDate, centerX, centerY, scale) {
@@ -1027,11 +1371,13 @@ function drawRouteOverlay(simDate, centerX, centerY, scale) {
     return;
   }
 
-  const pathSamples = buildTransferArcSamples(
-    activeRoutePlan.departureState.position,
-    activeRoutePlan.arrivalState.position,
-    64
-  );
+  const pathSamples = Array.isArray(activeRoutePlan.trajectorySamples)
+    ? activeRoutePlan.trajectorySamples.map((sample) => sample.position)
+    : buildTransferArcSamples(
+        activeRoutePlan.departureState.position,
+        activeRoutePlan.arrivalState.position,
+        64
+      );
 
   ctx.save();
   ctx.beginPath();
@@ -1050,6 +1396,64 @@ function drawRouteOverlay(simDate, centerX, centerY, scale) {
     ctx.lineTo(x, y);
   });
   ctx.stroke();
+
+  if (activeRoutePlan.asteroidRisk?.closest) {
+    const closest = activeRoutePlan.asteroidRisk.closest;
+    const routePoint = canvasToScreen(closest.shipPosition, lastViewState);
+    const asteroidPoint = canvasToScreen(closest.asteroidPosition, lastViewState);
+
+    ctx.setLineDash([]);
+    ctx.strokeStyle = activeRoutePlan.asteroidRisk.riskLevel === "collision"
+      ? "rgba(255, 93, 93, 0.95)"
+      : "rgba(255, 209, 102, 0.9)";
+    ctx.fillStyle = activeRoutePlan.asteroidRisk.riskLevel === "collision"
+      ? "rgba(255, 93, 93, 0.95)"
+      : "rgba(255, 209, 102, 0.9)";
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+    ctx.moveTo(routePoint.x, routePoint.y);
+    ctx.lineTo(asteroidPoint.x, asteroidPoint.y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(routePoint.x, routePoint.y, 8, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(asteroidPoint.x, asteroidPoint.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const turns = buildRouteTurnExplanations(activeRoutePlan);
+  lastRouteTurnHitTargets = [];
+  turns.forEach((turn, index) => {
+    const point = canvasToScreen(turn.position, lastViewState);
+    const isActive = activeRouteTurn?.label === turn.label;
+    lastRouteTurnHitTargets.push({
+      ...turn,
+      x: point.x,
+      y: point.y,
+      radius: 15
+    });
+
+    ctx.setLineDash([]);
+    ctx.fillStyle = isActive ? "rgba(255, 217, 107, 0.98)" : "rgba(157, 215, 255, 0.95)";
+    ctx.strokeStyle = "rgba(5, 13, 28, 0.82)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#071225";
+    ctx.font = `700 11px ${UI_FONT}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(turn.label, point.x, point.y + 0.5);
+    ctx.textAlign = "start";
+    ctx.textBaseline = "alphabetic";
+
+    if (isActive) {
+      drawRouteTurnPopup(turn, point);
+    }
+  });
   ctx.restore();
 }
 
@@ -1124,10 +1528,6 @@ function estimateHazardAlongRoute(startPosition, endPosition) {
   for (const sample of samples) {
     const radiusAu = sample.norm() / AU_KM;
 
-    if (radiusAu >= 2.05 && radiusAu <= 3.35) {
-      score += 1.2;
-      hits.add("Main asteroid belt");
-    }
     if (radiusAu >= 5 && radiusAu <= 5.35) {
       score += 0.9;
       hits.add("Jupiter Trojan corridor");
@@ -1349,11 +1749,18 @@ function estimateBodyTransferCandidate(originDescriptor, destinationDescriptor, 
   const r2 = arrivalState.position.norm();
   const transferSemiMajorAxis = (r1 + r2) / 2;
   const departureTransferSpeed = Math.sqrt(SUN_GM * ((2 / r1) - (1 / transferSemiMajorAxis)));
-  const arrivalTransferSpeed = Math.sqrt(SUN_GM * ((2 / r2) - (1 / transferSemiMajorAxis)));
   const departureTransferVelocity = departureState.velocity.unit().scale(departureTransferSpeed);
-  const arrivalTransferVelocity = arrivalState.velocity.unit().scale(arrivalTransferSpeed);
+  const transferStepCount = clamp(Math.round(transferSeconds / (DAY_SECONDS * 5)), 36, 220);
+  const propagatedArrivalState = propagateBallisticState(
+    {
+      position: departureState.position,
+      velocity: departureTransferVelocity
+    },
+    transferSeconds,
+    transferStepCount
+  );
   const departureBurn = departureTransferVelocity.sub(departureState.velocity);
-  const arrivalBurn = arrivalState.velocity.sub(arrivalTransferVelocity);
+  const arrivalBurn = arrivalState.velocity.sub(propagatedArrivalState.velocity);
   const departureDeltaV = departureBurn.norm();
   const arrivalDeltaV = arrivalBurn.norm();
   const totalDeltaV = departureDeltaV + arrivalDeltaV;
@@ -1372,7 +1779,7 @@ function estimateBodyTransferCandidate(originDescriptor, destinationDescriptor, 
   const phaseErrorRad = Math.abs(
     normalizeAngleRad(actualPhaseAtDeparture - requiredPhaseAtDeparture)
   );
-  const interceptErrorKm = phaseErrorRad * r2;
+  const interceptErrorKm = arrivalState.position.sub(propagatedArrivalState.position).norm();
   const hazard = estimateHazardAlongRoute(
     departureState.position,
     arrivalState.position
@@ -1779,6 +2186,78 @@ function departureBurnLabel(originVelocity, transitVelocity) {
   return "Burn toward the destination intercept point";
 }
 
+function getTrajectorySampleAt(plan, t) {
+  if (!Array.isArray(plan?.trajectorySamples) || plan.trajectorySamples.length === 0) {
+    return {
+      position: getRoutePositionAt(plan, t),
+      velocity: plan?.transitVelocity || new BrowserVec3(0, 0, 0),
+      t
+    };
+  }
+
+  const clampedT = clamp(t, 0, 1);
+  let closest = plan.trajectorySamples[0];
+  plan.trajectorySamples.forEach((sample) => {
+    if (Math.abs(sample.t - clampedT) < Math.abs(closest.t - clampedT)) {
+      closest = sample;
+    }
+  });
+  return closest;
+}
+
+function getRouteTurnDate(plan, t) {
+  const routeDurationMs = plan.arrivalDate.getTime() - plan.departureDate.getTime();
+  return new Date(plan.departureDate.getTime() + routeDurationMs * clamp(t, 0, 1));
+}
+
+function describeSolarBend(sample) {
+  const radiusAu = sample.position.norm() / AU_KM;
+  const radialSpeedKmS = sample.position.unit().dot(sample.velocity);
+
+  if (radialSpeedKmS > 0.25) {
+    return `The path opens outward here because the departure burn left the ship climbing away from the Sun while solar gravity keeps bending the coast into an arc at ${formatAu(radiusAu)}.`;
+  }
+
+  if (radialSpeedKmS < -0.25) {
+    return `The path bends inward here because the ship is falling toward a smaller solar orbit while the Sun keeps pulling the coast line around at ${formatAu(radiusAu)}.`;
+  }
+
+  return `The path turns mostly sideways here because the ship is coasting near the top of the transfer arc while solar gravity rotates the velocity around the Sun at ${formatAu(radiusAu)}.`;
+}
+
+function buildRouteTurnExplanations(plan) {
+  if (!plan?.departureState || !plan?.arrivalState) {
+    return [];
+  }
+
+  const midSample = getTrajectorySampleAt(plan, 0.5);
+  const arrivalSpeed = plan.arrivalDeltaV || 0;
+
+  return [
+    {
+      label: "1",
+      title: "Departure Burn",
+      date: plan.departureDate,
+      position: plan.departureState.position,
+      summary: `${plan.direction}. This first turn changes the ship from ${plan.originDescriptor.label}'s orbit into the transfer path, using ${formatDeltaV(plan.departureDeltaV)} of departure delta-v.`
+    },
+    {
+      label: "2",
+      title: "Solar Gravity Bend",
+      date: getRouteTurnDate(plan, 0.5),
+      position: midSample.position,
+      summary: describeSolarBend(midSample)
+    },
+    {
+      label: "3",
+      title: "Arrival Match",
+      date: plan.arrivalDate,
+      position: plan.arrivalState.position,
+      summary: `This final turn lines the ship up with ${plan.destinationDescriptor.label}'s future orbit, needing ${formatDeltaV(arrivalSpeed)} to match arrival speed.`
+    }
+  ];
+}
+
 function renderRouteStats(plan) {
   updateRouteTimeline(plan);
 
@@ -1804,6 +2283,8 @@ function renderRouteStats(plan) {
         { label: "Fuel Remaining", value: formatFuel(Math.max(0, plan.ship.fuelMassKg - plan.fuelRequiredKg)) },
         { label: "Crew Dose Limit", value: formatDose(plan.missionDoseLimitMsv) },
         { label: "Crew Radiation Risk", value: formatRiskLevel(plan.crewRadiationRisk) },
+        { label: "Closest Asteroid", value: plan.asteroidRisk?.closest?.asteroidId || "Clear" },
+        { label: "Asteroid Approach", value: plan.asteroidRisk?.closest ? formatKm(plan.asteroidRisk.closest.distanceKm) : "Clear" },
         { label: "Hazard Notes", value: plan.hazardHits.join(", ") || "Clear" }
       ]
     : [
@@ -1826,6 +2307,8 @@ function renderRouteStats(plan) {
         "Fuel Remaining",
         "Crew Dose Limit",
         "Crew Radiation Risk",
+        "Closest Asteroid",
+        "Asteroid Approach",
         "Hazard Notes"
       ].map((label) => ({ label, value: "Awaiting route" }));
 
@@ -1876,7 +2359,22 @@ function planActiveRoute() {
   );
 
   const plan = estimateRoute(originDescriptor, destinationDescriptor, simDate, ship);
+  plan.trajectorySamples = buildPropagatedTrajectorySamples(
+    plan.departureState,
+    plan.transitVelocity,
+    plan.travelDays * DAY_SECONDS,
+    96
+  );
+  plan.asteroidRisk = scanAsteroidTrajectoryRisk(plan);
+  if (plan.asteroidRisk?.riskLevel === "collision") {
+    plan.hazardScore += 8;
+    plan.hazardHits = [...new Set([...plan.hazardHits, `Collision risk with ${plan.asteroidRisk.closest.asteroidId}`])];
+  } else if (plan.asteroidRisk?.riskLevel === "warning") {
+    plan.hazardScore += 3;
+    plan.hazardHits = [...new Set([...plan.hazardHits, `Close asteroid approach: ${plan.asteroidRisk.closest.asteroidId}`])];
+  }
   activeRoutePlan = plan;
+  activeRouteTurn = null;
 
   const feasibilityText = plan.feasible
     ? `Best transfer route from ${plan.originDescriptor.label} to ${plan.destinationDescriptor.label}`
@@ -1894,7 +2392,8 @@ function planActiveRoute() {
     `Minimum fuel to make the trip at all is ${formatNumber(plan.minimumFuelRequiredKg, 1)} kg. ` +
     `For shortest travel time, depart ${formatShortDate(plan.fastestDepartureDate)} and travel for ${formatDays(plan.fastestTravelDays)}. ` +
     `Lowest-radiation departure is ${formatShortDate(plan.lowestRadiationDepartureDate)}. ` +
-    `Sun gravity is included in the transfer estimate.`;
+    `Sun gravity is included in the transfer estimate. ` +
+    `${getAsteroidRiskStatus(plan.asteroidRisk).alert}`;
 
   renderRouteStats(plan);
   setStatus(
@@ -1912,8 +2411,11 @@ function tryPlanActiveRoute(statusText) {
     }
     return true;
   } catch (error) {
+    activeRoutePlan = null;
+    activeRouteTurn = null;
     routeSummary.textContent = error.message;
     renderRouteStats();
+    updateAsteroidMonitor();
     setStatus(error.message);
     return false;
   }
@@ -2116,7 +2618,7 @@ function updateUI(simDate) {
     updateRouteTimeline(activeRoutePlan, simDate);
   }
 
-  updateMissionTelemetry(simDate);
+  updateAsteroidMonitor();
 }
 
 function animate() {
@@ -2334,9 +2836,8 @@ canvas.addEventListener("pointerdown", (event) => {
   const destinationMarker = canvasToScreen(destinationState.position, lastViewState);
   const originLabel = getMarkerLabel("origin");
   const destinationLabel = getMarkerLabel("destination");
-  const originDistance = pointHitsMarker(pointer, originMarker, originLabel);
+  const originDistance = pointHitsMarker(pointer, originMarker, originLabel, false);
   const destinationDistance = pointHitsMarker(pointer, destinationMarker, destinationLabel);
-
   if (Number.isFinite(originDistance) && originDistance <= destinationDistance) {
     dragTarget = "origin";
     isPanningView = false;
@@ -2359,6 +2860,20 @@ canvas.addEventListener("pointerdown", (event) => {
     return;
   }
 
+  const routeTurnTarget = lastRouteTurnHitTargets.find((turn) =>
+    Math.hypot(pointer.x - turn.x, pointer.y - turn.y) <= turn.radius
+  );
+
+  if (routeTurnTarget) {
+    activeRouteTurn = activeRouteTurn?.label === routeTurnTarget.label ? null : routeTurnTarget;
+    isPanningView = false;
+    dragTarget = null;
+    dragPointerId = null;
+    suppressNextCanvasClick = true;
+    setStatus(activeRouteTurn ? `Turn ${activeRouteTurn.label}: ${activeRouteTurn.title}` : "Route turn popup closed.");
+    return;
+  }
+
   isPanningView = true;
   dragTarget = null;
   dragPointerId = event.pointerId;
@@ -2369,7 +2884,15 @@ canvas.addEventListener("pointerdown", (event) => {
 });
 
 canvas.addEventListener("pointermove", (event) => {
-  if (!lastViewState || event.pointerId !== dragPointerId) return;
+  if (!lastViewState) return;
+
+  if (dragPointerId === null) {
+    updateHoveredAsteroidRisk(getPointerPosition(event));
+    canvas.style.cursor = hoveredAsteroidRisk ? "pointer" : "";
+    return;
+  }
+
+  if (event.pointerId !== dragPointerId) return;
   pointerMovedDuringDrag = true;
 
   if (dragTarget === "origin") {
@@ -2395,6 +2918,11 @@ canvas.addEventListener("pointermove", (event) => {
 });
 
 canvas.addEventListener("click", (event) => {
+  if (suppressNextCanvasClick) {
+    suppressNextCanvasClick = false;
+    return;
+  }
+
   if (pointerMovedDuringDrag) {
     pointerMovedDuringDrag = false;
     return;
@@ -2406,11 +2934,12 @@ canvas.addEventListener("click", (event) => {
   );
 
   if (!selectedTarget) {
+    activeRouteTurn = null;
     hidePlanetInfo();
     return;
   }
 
-  showPlanetInfo(selectedTarget.name);
+  zoomIntoPlanetBeforeOverview(selectedTarget.name);
 });
 
 function finishOriginDrag(event) {
