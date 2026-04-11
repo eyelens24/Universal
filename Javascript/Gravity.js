@@ -1,34 +1,5 @@
 
-/*
-  ============================================
   GRAVITY.JS — SPICE-DRIVEN SOLAR SYSTEM GRAVITY SIMULATOR
-  ============================================
-
-  What this file does:
-  - Loads real solar-system body states from SPICE through spice-integration.js
-  - Computes gravity from those bodies on a spacecraft
-  - Returns:
-      (a) total gravitational acceleration
-      (b) per-body gravity contributions
-  - Propagates the spacecraft with RK4
-  - Lets you query gravity at any given ephemeris time (ET)
-
-  Units used:
-  - distance: km
-  - time: s
-  - velocity: km/s
-  - acceleration: km/s^2
-  - mu: km^3/s^2
-  - SPICE ET: seconds past J2000 TDB
-
-  IMPORTANT:
-  - This is still a Newtonian point-mass gravity model for the spacecraft.
-  - The planets/moon/sun are NOT numerically integrated here.
-    Their positions come from SPICE kernels.
-  - This is usually the correct architecture:
-      SPICE = environment truth
-      Your simulator = spacecraft dynamics
-*/
 
 const path = require("path");
 const {
