@@ -1,14 +1,4 @@
-/*
-  simulation-bridge.js
-  --------------------------------------------
-  Main orchestrator that ties together:
-  - GravitySimulator
-  - SpacecraftController
-  - SimulationClock
-  - Collision/proximity/telemetry
-  - Trajectory recording
-  - optional renderer hooks
-*/
+
 
 const { SimulationClock } = require("./sim-clock");
 const { createTelemetrySnapshot } = require("./telemetry");
