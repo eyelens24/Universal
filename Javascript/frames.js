@@ -1,9 +1,4 @@
-/*
-  frames.js
-  --------------------------------------------
-  Reference-frame helpers for barycentric / body-relative
-  / velocity-relative calculations.
-*/
+
 
 function getBodyByName(bodies, name) {
   return bodies.find((b) => b.name === name) ?? null;
