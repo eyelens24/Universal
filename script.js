@@ -26,6 +26,7 @@ const closePlannerBtn = document.getElementById("closePlannerBtn");
 const plannerModal = document.getElementById("plannerModal");
 const plannerBackdrop = document.getElementById("plannerBackdrop");
 const planetOverviewPanel = document.querySelector(".planet-overview-panel");
+const planetOverviewPanel = document.querySelector(".planet-overview-panel");
 
 const originMode = document.getElementById("originMode");
 const originBody = document.getElementById("originBody");
@@ -48,7 +49,6 @@ const fuelMassInput = document.getElementById("fuelMassInput");
 const ispInput = document.getElementById("ispInput");
 const preferTimeInput = document.getElementById("preferTimeInput");
 const preferFuelInput = document.getElementById("preferFuelInput");
-const preferRadiationInput = document.getElementById("preferRadiationInput");
 const swapRouteBtn = document.getElementById("swapRouteBtn");
 const planRouteBtn = document.getElementById("planRouteBtn");
 const routeSummary = document.getElementById("routeSummary");
@@ -56,11 +56,13 @@ const routeStats = document.getElementById("routeStats");
 const planetInfo = document.getElementById("planetInfo");
 const closePlanetInfoBtn = document.getElementById("closePlanetInfoBtn");
 const planetEndpointBtn = document.getElementById("planetEndpointBtn");
+const planetEndpointBtn = document.getElementById("planetEndpointBtn");
 const planetName = document.getElementById("planetName");
 const planetDistance = document.getElementById("planetDistance");
 const planetSize = document.getElementById("planetSize");
 const planetTemp = document.getElementById("planetTemp");
 const planetElements = document.getElementById("planetElements");
+const planetOverviewImage = document.getElementById("planetOverviewImage");
 const planetOverviewImage = document.getElementById("planetOverviewImage");
 
 const BrowserVec3 = window.Vec3;
@@ -87,6 +89,7 @@ const DEEP_SPACE_GCR_MSV_PER_DAY = 1.8;
 const NOMINAL_SOLAR_PARTICLE_MSV_PER_DAY_AT_1_AU = 0.08;
 const PEAK_DOSE_RATE_LIMIT_MSV_PER_DAY = 25;
 const MIN_CREW_SAFE_SOLAR_DISTANCE_AU = 0.7;
+const FUEL_DISPLAY_TOLERANCE_KG = 0.1;
 
 const planetNames = [
   "MERCURY",
@@ -147,6 +150,19 @@ const PLANET_IMAGE_PATHS = {
 
 const UI_FONT = "\"Science Gothic\", Arial, sans-serif";
 
+const PLANET_IMAGE_PATHS = {
+  MERCURY: "assets/mercury.png",
+  VENUS: "assets/venus.png",
+  EARTH: "assets/earth.png",
+  MARS: "assets/mars.png",
+  JUPITER: "assets/jupiter.png",
+  SATURN: "assets/saturn.png",
+  URANUS: "assets/uranus.png",
+  NEPTUNE: "assets/neptune.png"
+};
+
+const UI_FONT = "\"Science Gothic\", Arial, sans-serif";
+
 let usingRealTime = true;
 let paused = false;
 let timeScale = 1;
@@ -169,9 +185,15 @@ let selectedPlanetName = null;
 let pointerMovedDuringDrag = false;
 let lastPlanetHitTargets = [];
 let planetOverviewTimer = null;
+let planetOverviewTimer = null;
 
 const asteroidImg = new Image();
 asteroidImg.src = "assets/asteroid.png";
+
+Object.values(PLANET_IMAGE_PATHS).forEach((path) => {
+  const image = new Image();
+  image.src = path;
+});
 
 Object.values(PLANET_IMAGE_PATHS).forEach((path) => {
   const image = new Image();
@@ -183,6 +205,9 @@ const asteroidBeltOuter = 205;
 const asteroidCount = 140;
 const asteroids = [];
 const stars = [];
+let canvasResizeFrame = null;
+let canvasResizeObserver = null;
+let canvasResizeTimeout = null;
 let canvasResizeFrame = null;
 let canvasResizeObserver = null;
 let canvasResizeTimeout = null;
@@ -227,7 +252,17 @@ function resizeCanvas() {
     return;
   }
 
+  if (!(rect.width > 0) || !(rect.height > 0)) {
+    return;
+  }
+
   const dpr = window.devicePixelRatio || 1;
+  const nextWidth = Math.round(rect.width * dpr);
+  const nextHeight = Math.round(rect.height * dpr);
+
+  if (canvas.width === nextWidth && canvas.height === nextHeight) {
+    return;
+  }
   const nextWidth = Math.round(rect.width * dpr);
   const nextHeight = Math.round(rect.height * dpr);
 
@@ -237,11 +272,53 @@ function resizeCanvas() {
 
   canvas.width = nextWidth;
   canvas.height = nextHeight;
+  canvas.width = nextWidth;
+  canvas.height = nextHeight;
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.scale(dpr, dpr);
 
   createStarField(rect.width, rect.height);
+}
+
+function scheduleCanvasResize(immediate = false) {
+  if (canvasResizeFrame !== null) {
+    return;
+  }
+
+  if (immediate) {
+    canvasResizeFrame = requestAnimationFrame(() => {
+      canvasResizeFrame = null;
+      resizeCanvas();
+    });
+    return;
+  }
+
+  if (canvasResizeTimeout !== null) {
+    clearTimeout(canvasResizeTimeout);
+  }
+
+  canvasResizeTimeout = setTimeout(() => {
+    canvasResizeTimeout = null;
+    canvasResizeFrame = requestAnimationFrame(() => {
+      canvasResizeFrame = null;
+      resizeCanvas();
+    });
+  }, 80);
+}
+
+function observeCanvasLayout() {
+  if (typeof ResizeObserver !== "function") {
+    return;
+  }
+
+  canvasResizeObserver = new ResizeObserver(() => {
+    scheduleCanvasResize();
+  });
+
+  if (canvas.parentElement) {
+    canvasResizeObserver.observe(canvas.parentElement);
+  }
 }
 
 function scheduleCanvasResize(immediate = false) {
@@ -317,6 +394,16 @@ function formatDateForInput(date) {
 }
 
 function formatShortDate(date) {
+  return date.toLocaleString([], {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function formatMapDate(date) {
   return date.toLocaleString([], {
     year: "numeric",
     month: "short",
@@ -546,6 +633,7 @@ function getPlanetRadius(name) {
 }
 
 function getSunDisplayRadius(simDate, scale) {
+  void simDate;
   const baseRadius = 16;
   const zoomBoost = 0.32 + Math.pow(Math.max(zoomLevel, 0.5), 0.92) * 0.78;
   const mercuryOrbitPx = spice.getBodyInfo("MERCURY").a * AU_KM * scale;
@@ -559,6 +647,7 @@ function getPlanetDisplayName(name) {
   return name.charAt(0) + name.slice(1).toLowerCase();
 }
 
+function getPlanetOverviewData(name, simDate = getCurrentSimTime()) {
 function getPlanetOverviewData(name, simDate = getCurrentSimTime()) {
   const info = spice.getBodyInfo(name);
   const state = getBodyState(name, simDate);
@@ -618,16 +707,72 @@ function populatePlanetOverview(name, simDate = getCurrentSimTime()) {
   const data = getPlanetOverviewData(name, simDate);
 
   selectedPlanetName = name;
+  return {
+    info,
+    imagePath: PLANET_IMAGE_PATHS[name],
+    displayName: getPlanetDisplayName(name),
+    distanceFromEarthAu,
+    sizeText: `${formatKm(info.radiusKm)} radius`,
+    temperatureText: intel?.temperature || "No thermal profile available",
+    elementsText: intel?.elements || "No composition data available"
+  };
+}
+
+function clearPlanetOverviewTimer() {
+  if (planetOverviewTimer) {
+    clearTimeout(planetOverviewTimer);
+    planetOverviewTimer = null;
+  }
+}
+
+function resetViewportScroll() {
+  if ("scrollRestoration" in window.history) {
+    window.history.scrollRestoration = "manual";
+  }
+
+  window.scrollTo(0, 0);
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+}
+
+function resetPlanetOverviewScroll() {
+  if (planetOverviewPanel) {
+    planetOverviewPanel.scrollTop = 0;
+  }
+}
+
+function hidePlanetInfo() {
+  clearPlanetOverviewTimer();
+  planetInfo?.classList.remove("is-open");
+  planetInfo?.setAttribute("aria-hidden", "true");
+  resetPlanetOverviewScroll();
+
+  planetOverviewTimer = setTimeout(() => {
+    planetInfo?.classList.add("hidden");
+    planetOverviewTimer = null;
+  }, 220);
+
+  selectedPlanetName = null;
+}
+
+function populatePlanetOverview(name, simDate = getCurrentSimTime()) {
+  const data = getPlanetOverviewData(name, simDate);
+
+  selectedPlanetName = name;
   if (planetName) {
+    planetName.textContent = data.displayName;
     planetName.textContent = data.displayName;
   }
   if (planetDistance) {
     planetDistance.textContent = name === "EARTH" ? "0 AU" : formatAu(data.distanceFromEarthAu);
+    planetDistance.textContent = name === "EARTH" ? "0 AU" : formatAu(data.distanceFromEarthAu);
   }
   if (planetSize) {
     planetSize.textContent = data.sizeText;
+    planetSize.textContent = data.sizeText;
   }
   if (planetTemp) {
+    planetTemp.textContent = data.temperatureText;
     planetTemp.textContent = data.temperatureText;
   }
   if (planetElements) {
@@ -636,7 +781,17 @@ function populatePlanetOverview(name, simDate = getCurrentSimTime()) {
   if (planetOverviewImage) {
     planetOverviewImage.src = data.imagePath;
     planetOverviewImage.alt = `${data.displayName} planet render`;
+    planetElements.textContent = data.elementsText;
   }
+  if (planetOverviewImage) {
+    planetOverviewImage.src = data.imagePath;
+    planetOverviewImage.alt = `${data.displayName} planet render`;
+  }
+}
+
+function showPlanetInfo(name) {
+  clearPlanetOverviewTimer();
+  populatePlanetOverview(name);
 }
 
 function showPlanetInfo(name) {
@@ -651,89 +806,6 @@ function showPlanetInfo(name) {
     resetPlanetOverviewScroll();
     planetInfo?.classList.add("is-open");
   });
-}
-
-function getMarkerLabel(type) {
-  return type === "origin" ? "Ship" : "Destination";
-}
-
-function drawDraggableMarker(position, viewState, options) {
-  const screenPoint = canvasToScreen(position, viewState);
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.fillStyle = options.isDragging ? options.activeColor : options.color;
-  ctx.strokeStyle = "rgba(255,255,255,0.95)";
-  ctx.lineWidth = 2;
-  ctx.arc(screenPoint.x, screenPoint.y, 7, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.setLineDash([4, 4]);
-  ctx.strokeStyle = options.ringColor;
-  ctx.arc(screenPoint.x, screenPoint.y, 14, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.restore();
-
-  ctx.fillStyle = options.textColor;
-  ctx.font = `700 12px ${UI_FONT}`;
-  ctx.fillText(options.label, screenPoint.x + 12, screenPoint.y + 16);
-
-  return screenPoint;
-}
-
-function drawOriginMarker(simDate, viewState) {
-  const originDescriptor = getCurrentOriginDescriptor();
-  const originState = resolveDescriptorState(originDescriptor, simDate);
-
-  return drawDraggableMarker(originState.position, viewState, {
-    label: getMarkerLabel("origin"),
-    color: "#80ffce",
-    activeColor: "#8ec5ff",
-    ringColor: "rgba(128, 255, 206, 0.55)",
-    textColor: "#d8fff1",
-    isDragging: dragTarget === "origin"
-  });
-}
-
-function drawDestinationMarker(simDate, viewState) {
-  const destinationDescriptor = getCurrentDestinationDescriptor();
-  const destinationState = resolveDescriptorState(destinationDescriptor, simDate);
-
-  return drawDraggableMarker(destinationState.position, viewState, {
-    label: getMarkerLabel("destination"),
-    color: "#ffd166",
-    activeColor: "#ffc98d",
-    ringColor: "rgba(255, 209, 102, 0.55)",
-    textColor: "#fff0c2",
-    isDragging: dragTarget === "destination"
-  });
-}
-
-function drawRouteOverlay(simDate, centerX, centerY, scale) {
-  if (!activeRoutePlan) {
-    return;
-  }
-
-  const currentOriginState = resolveDescriptorState(activeRoutePlan.originDescriptor, simDate);
-  const currentDestinationState = resolveDescriptorState(activeRoutePlan.destinationDescriptor, simDate);
-  const startX = centerX + currentOriginState.position.x * scale;
-  const startY = centerY + currentOriginState.position.y * scale;
-  const endX = centerX + currentDestinationState.position.x * scale;
-  const endY = centerY + currentDestinationState.position.y * scale;
-  const controlX = (startX + endX) / 2;
-  const controlY = (startY + endY) / 2 - Math.min(canvas.clientWidth, canvas.clientHeight) * 0.08;
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.setLineDash([10, 8]);
-  ctx.strokeStyle = activeRoutePlan.feasible ? "rgba(120, 255, 206, 0.95)" : "rgba(255, 176, 120, 0.95)";
-  ctx.lineWidth = 2.5;
-  ctx.moveTo(startX, startY);
-  ctx.quadraticCurveTo(controlX, controlY, endX, endY);
-  ctx.stroke();
-  ctx.restore();
 }
 
 function getPlanetDrawData(name, simDate, scale) {
@@ -759,6 +831,10 @@ function impulseFuelRequiredKg(deltaVKmS, dryMassKg, fuelMassKg, ispSeconds) {
 
   const massRatio = Math.exp((deltaVKmS * 1000) / (ispSeconds * G0));
   return Math.max(0, dryMassKg * (massRatio - 1));
+}
+
+function hasEnoughFuel(fuelRequiredKg, fuelMassKg) {
+  return fuelMassKg + FUEL_DISPLAY_TOLERANCE_KG >= fuelRequiredKg;
 }
 
 function buildDescriptor(mode, bodySelect, xInput, yInput, zInput, fallbackLabel) {
@@ -838,7 +914,7 @@ function estimateRadiationAlongRoute(startPosition, endPosition, travelDays) {
 
   for (let i = 0; i <= samples; i += 1) {
     const t = i / samples;
-    const sample = startPosition.add(endPosition.sub(startPosition).scale(t));
+    const sample = interpolateCrewSafeRoutePosition(startPosition, endPosition, t);
     const radiusAu = Math.max(0.05, sample.norm() / AU_KM);
     closestRadiusAu = Math.min(closestRadiusAu, radiusAu);
 
@@ -870,6 +946,30 @@ function estimateRadiationAlongRoute(startPosition, endPosition, travelDays) {
     violatesSolarKeepout,
     closestRadiusAu
   };
+}
+
+function interpolateCrewSafeRoutePosition(startPosition, endPosition, t) {
+  const startRadius = Math.max(startPosition.norm(), MIN_CREW_SAFE_SOLAR_DISTANCE_AU * AU_KM);
+  const endRadius = Math.max(endPosition.norm(), MIN_CREW_SAFE_SOLAR_DISTANCE_AU * AU_KM);
+  const startAngle = Math.atan2(startPosition.y, startPosition.x);
+  const endAngle = Math.atan2(endPosition.y, endPosition.x);
+  let angleDelta = normalizeAngleRad(endAngle - startAngle);
+
+  if (Math.abs(angleDelta) > Math.PI * 0.92) {
+    angleDelta = angleDelta > 0 ? angleDelta - Math.PI * 2 : angleDelta + Math.PI * 2;
+  }
+
+  const eased = (1 - Math.cos(Math.PI * t)) / 2;
+  const angle = startAngle + angleDelta * eased;
+  const linearRadius = startRadius + (endRadius - startRadius) * t;
+  const outwardArc = Math.sin(Math.PI * t) * Math.max(startRadius, endRadius) * 0.18;
+  const radius = Math.max(MIN_CREW_SAFE_SOLAR_DISTANCE_AU * AU_KM * 1.08, linearRadius + outwardArc);
+
+  return new BrowserVec3(
+    Math.cos(angle) * radius,
+    Math.sin(angle) * radius,
+    startPosition.z + (endPosition.z - startPosition.z) * t
+  );
 }
 
 function getCrewMissionDoseLimitMsv(travelDays) {
@@ -948,12 +1048,12 @@ function getOptimizationPreferences() {
   return {
     time: Boolean(preferTimeInput?.checked),
     fuel: Boolean(preferFuelInput?.checked),
-    radiation: Boolean(preferRadiationInput?.checked)
+    radiation: true
   };
 }
 
 function ensureAtLeastOnePreference(preferences) {
-  if (preferences.time || preferences.fuel || preferences.radiation) {
+  if (preferences.time || preferences.fuel) {
     return preferences;
   }
 
@@ -969,21 +1069,14 @@ function getRouteScore(candidate, metrics, preferences) {
     return Number.POSITIVE_INFINITY;
   }
 
-  let score = candidate.phaseErrorRad ?? 0;
+  const radiationSafetyScore = candidate.radiationScore / Math.max(metrics.maxRadiationScore, 1);
+  let score = radiationSafetyScore * 2 + (candidate.phaseErrorRad ?? 0);
 
   if (preferences.time) {
     score += candidate.travelDays / Math.max(metrics.maxTravelDays, 1);
   }
   if (preferences.fuel) {
     score += candidate.fuelRequiredKg / Math.max(metrics.maxFuelRequiredKg, 1);
-  }
-  if (preferences.radiation) {
-    score += candidate.radiationScore / Math.max(metrics.maxRadiationScore, 1);
-    score += Math.max(0, (candidate.radiationDoseLimitRatio ?? 0) - 0.75) * 3;
-    score += Math.max(0, (candidate.radiationPeakLimitRatio ?? 0) - 0.7) * 2;
-    if ((candidate.closestSunRadiusAu ?? 1) < MIN_CREW_SAFE_SOLAR_DISTANCE_AU) {
-      score += 6;
-    }
   }
 
   return score;
@@ -993,8 +1086,76 @@ function summarizePreferenceText(preferences) {
   const active = [];
   if (preferences.time) active.push("shortest travel time");
   if (preferences.fuel) active.push("fuel");
-  if (preferences.radiation) active.push("radiation");
   return active.join(", ");
+}
+
+function getRadiationRiskRank(riskLevel) {
+  switch (riskLevel) {
+    case "Within crew standard":
+      return 0;
+    case "Elevated":
+      return 1;
+    case "Exceeds crew standard":
+      return 2;
+    case "Critical":
+      return 3;
+    case "Solar keep-out violation":
+      return 4;
+    default:
+      return 5;
+  }
+}
+
+function getRoutePool(validCandidates) {
+  const crewSafeCandidates = validCandidates
+    .filter((candidate) => candidate.crewSafe);
+  const solarSafeCandidates = validCandidates
+    .filter((candidate) => !candidate.violatesSolarKeepout);
+
+  return {
+    candidates: crewSafeCandidates.length ? crewSafeCandidates : solarSafeCandidates.length ? solarSafeCandidates : validCandidates,
+    hasCrewSafeRoutes: crewSafeCandidates.length > 0
+  };
+}
+
+function compareOptimizedCandidates(a, b, metrics, preferences, tieBreaker) {
+  const radiationPrimarySort =
+    (a.crewSafe ? 0 : 1) - (b.crewSafe ? 0 : 1) ||
+    (a.violatesSolarKeepout ? 1 : 0) - (b.violatesSolarKeepout ? 1 : 0) ||
+    getRadiationRiskRank(a.crewRadiationRisk) - getRadiationRiskRank(b.crewRadiationRisk);
+
+  if (radiationPrimarySort !== 0) {
+    return radiationPrimarySort;
+  }
+
+  if (preferences.time && !preferences.fuel) {
+    return a.travelDays - b.travelDays ||
+      a.radiationScore - b.radiationScore ||
+      tieBreaker(a, b);
+  }
+
+  if (preferences.fuel && !preferences.time) {
+    return a.fuelRequiredKg - b.fuelRequiredKg ||
+      a.radiationScore - b.radiationScore ||
+      tieBreaker(a, b);
+  }
+
+  return getRouteScore(a, metrics, preferences) - getRouteScore(b, metrics, preferences) ||
+    tieBreaker(a, b);
+}
+
+function getLeaveNowPlan(validCandidates, routePool) {
+  const immediateSafeCandidates = routePool
+    .filter((candidate) => candidate.delayDays === 0);
+  const immediateCandidates = immediateSafeCandidates.length
+    ? immediateSafeCandidates
+    : validCandidates.filter((candidate) => candidate.delayDays === 0);
+
+  return [...immediateCandidates].sort((a, b) =>
+    a.fuelRequiredKg - b.fuelRequiredKg ||
+    a.radiationScore - b.radiationScore ||
+    a.travelDays - b.travelDays
+  )[0] || null;
 }
 
 function estimateBodyTransferCandidate(originDescriptor, destinationDescriptor, departureDate, ship) {
@@ -1067,7 +1228,7 @@ function estimateBodyTransferCandidate(originDescriptor, destinationDescriptor, 
     arrivalDeltaV,
     totalDeltaV,
     fuelRequiredKg,
-    feasible: fuelRequiredKg <= ship.fuelMassKg,
+    feasible: hasEnoughFuel(fuelRequiredKg, ship.fuelMassKg),
     fuelMarginKg: ship.fuelMassKg - fuelRequiredKg,
     arrivalSpeedKmS: arrivalBurn.norm(),
     departureDistanceKm: departureState.position.sub(arrivalState.position).norm(),
@@ -1215,7 +1376,7 @@ function estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate
         arrivalDeltaV,
         totalDeltaV,
         fuelRequiredKg,
-        feasible: fuelRequiredKg <= ship.fuelMassKg,
+        feasible: hasEnoughFuel(fuelRequiredKg, ship.fuelMassKg),
         fuelMarginKg: ship.fuelMassKg - fuelRequiredKg,
         arrivalSpeedKmS: arrivalBurn.norm(),
         departureDistanceKm: departureState.position.sub(arrivalState.position).norm(),
@@ -1252,20 +1413,20 @@ function estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate
     maxRadiationScore: 1
   });
 
-  const crewSafeCandidates = validCandidates
-    .filter((candidate) => candidate.crewSafe);
-  const routePool = crewSafeCandidates.length ? crewSafeCandidates : validCandidates;
+  const routePoolResult = getRoutePool(validCandidates);
+  const routePool = routePoolResult.candidates;
 
   const feasibleCandidates = routePool
     .filter((candidate) => candidate.feasible)
     .sort((a, b) =>
-      getRouteScore(a, metrics, preferences) - getRouteScore(b, metrics, preferences) ||
-      (a.delayDays + a.travelDays) - (b.delayDays + b.travelDays) ||
-      a.arrivalPositionErrorKm - b.arrivalPositionErrorKm ||
-      a.travelDays - b.travelDays ||
-      a.delayDays - b.delayDays ||
-      a.totalDeltaV - b.totalDeltaV ||
-      a.hazardScore - b.hazardScore
+      compareOptimizedCandidates(a, b, metrics, preferences, (candidateA, candidateB) =>
+        (candidateA.delayDays + candidateA.travelDays) - (candidateB.delayDays + candidateB.travelDays) ||
+        candidateA.arrivalPositionErrorKm - candidateB.arrivalPositionErrorKm ||
+        candidateA.travelDays - candidateB.travelDays ||
+        candidateA.delayDays - candidateB.delayDays ||
+        candidateA.totalDeltaV - candidateB.totalDeltaV ||
+        candidateA.hazardScore - candidateB.hazardScore
+      )
     );
 
   const minimumFuelCandidates = [...routePool].sort((a, b) =>
@@ -1276,7 +1437,7 @@ function estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate
     a.totalDeltaV - b.totalDeltaV
   );
 
-  const fallbackCandidates = [...(routePool.length ? routePool : candidates)].sort((a, b) =>
+  const fallbackCandidates = [...routePool].sort((a, b) =>
     a.arrivalPositionErrorKm - b.arrivalPositionErrorKm ||
     a.fuelRequiredKg - b.fuelRequiredKg ||
     (a.delayDays + a.travelDays) - (b.delayDays + b.travelDays) ||
@@ -1297,6 +1458,7 @@ function estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate
   const minimumFuelPlan = minimumFuelCandidates[0] || fallbackCandidates[0] || null;
   const lowestRadiationPlan = lowestRadiationCandidates[0] || fallbackCandidates[0] || null;
   const fastestPlan = fastestCandidates[0] || fallbackCandidates[0] || null;
+  const leaveNowPlan = getLeaveNowPlan(validCandidates, routePool);
   if (!best) {
     throw new Error("No route candidates could be generated.");
   }
@@ -1310,7 +1472,9 @@ function estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate
     originDescriptor,
     destinationDescriptor,
     ship,
+    ...best,
     feasible: best.feasible,
+    hasCrewSafeRoutes: routePoolResult.hasCrewSafeRoutes,
     candidateCount: candidates.length,
     validCandidateCount: validCandidates.length,
     direction,
@@ -1323,7 +1487,10 @@ function estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate
     lowestRadiationTravelDays: lowestRadiationPlan ? lowestRadiationPlan.travelDays : best.travelDays,
     fastestDepartureDate: fastestPlan ? fastestPlan.departureDate : best.departureDate,
     fastestTravelDays: fastestPlan ? fastestPlan.travelDays : best.travelDays,
-    ...best
+    leaveNowFuelRequiredKg: leaveNowPlan ? leaveNowPlan.fuelRequiredKg : best.fuelRequiredKg,
+    leaveNowTravelDays: leaveNowPlan ? leaveNowPlan.travelDays : best.travelDays,
+    leaveNowCrewRadiationRisk: leaveNowPlan ? leaveNowPlan.crewRadiationRisk : best.crewRadiationRisk,
+    leaveNowIsCrewSafe: leaveNowPlan ? leaveNowPlan.crewSafe : best.crewSafe
   };
 }
 
@@ -1369,15 +1536,13 @@ function estimateRoute(originDescriptor, destinationDescriptor, simDate, ship) {
     maxRadiationScore: 1
   });
 
-  const crewSafeCandidates = validCandidates
-    .filter((candidate) => candidate.crewSafe);
-  const routePool = crewSafeCandidates.length ? crewSafeCandidates : validCandidates;
+  const routePoolResult = getRoutePool(validCandidates);
+  const routePool = routePoolResult.candidates;
 
   const feasibleCandidates = routePool
     .filter((candidate) => candidate.feasible)
     .sort((a, b) =>
-      getRouteScore(a, metrics, preferences) - getRouteScore(b, metrics, preferences) ||
-      comparePlanCandidates(a, b)
+      compareOptimizedCandidates(a, b, metrics, preferences, comparePlanCandidates)
     );
 
   const minimumFuelCandidates = [...routePool].sort((a, b) =>
@@ -1386,7 +1551,7 @@ function estimateRoute(originDescriptor, destinationDescriptor, simDate, ship) {
     comparePlanCandidates(a, b)
   );
 
-  const fallbackCandidates = [...(routePool.length ? routePool : candidates)].sort(comparePlanCandidates);
+  const fallbackCandidates = [...routePool].sort(comparePlanCandidates);
   const lowestRadiationCandidates = [...routePool].sort((a, b) =>
     a.radiationScore - b.radiationScore ||
     a.peakRadiation - b.peakRadiation ||
@@ -1400,6 +1565,7 @@ function estimateRoute(originDescriptor, destinationDescriptor, simDate, ship) {
   const minimumFuelPlan = minimumFuelCandidates[0] || fallbackCandidates[0] || null;
   const lowestRadiationPlan = lowestRadiationCandidates[0] || fallbackCandidates[0] || null;
   const fastestPlan = fastestCandidates[0] || fallbackCandidates[0] || null;
+  const leaveNowPlan = getLeaveNowPlan(validCandidates, routePool);
 
   if (!best) {
     throw new Error("No route candidates could be generated.");
@@ -1414,7 +1580,9 @@ function estimateRoute(originDescriptor, destinationDescriptor, simDate, ship) {
     originDescriptor,
     destinationDescriptor,
     ship,
+    ...best,
     feasible: best.feasible,
+    hasCrewSafeRoutes: routePoolResult.hasCrewSafeRoutes,
     candidateCount: candidates.length,
     validCandidateCount: validCandidates.length,
     direction,
@@ -1427,7 +1595,10 @@ function estimateRoute(originDescriptor, destinationDescriptor, simDate, ship) {
     lowestRadiationTravelDays: lowestRadiationPlan ? lowestRadiationPlan.travelDays : best.travelDays,
     fastestDepartureDate: fastestPlan ? fastestPlan.departureDate : best.departureDate,
     fastestTravelDays: fastestPlan ? fastestPlan.travelDays : best.travelDays,
-    ...best
+    leaveNowFuelRequiredKg: leaveNowPlan ? leaveNowPlan.fuelRequiredKg : best.fuelRequiredKg,
+    leaveNowTravelDays: leaveNowPlan ? leaveNowPlan.travelDays : best.travelDays,
+    leaveNowCrewRadiationRisk: leaveNowPlan ? leaveNowPlan.crewRadiationRisk : best.crewRadiationRisk,
+    leaveNowIsCrewSafe: leaveNowPlan ? leaveNowPlan.crewSafe : best.crewSafe
   };
 }
 
@@ -1456,9 +1627,10 @@ function renderRouteStats(plan) {
     ? [
         { label: "Best Time To Leave", value: formatShortDate(plan.departureDate) },
         { label: "Destination Arrival", value: formatShortDate(plan.arrivalDate) },
-        { label: "Selected Priorities", value: summarizePreferenceText(plan.preferences) || "time, fuel, radiation" },
+        { label: "Selected Priorities", value: summarizePreferenceText(plan.preferences) || "crew-safe route" },
         { label: "Minimum Fuel To Make Trip", value: formatFuel(plan.minimumFuelRequiredKg) },
         { label: "Lowest Fuel Leave Time", value: formatShortDate(plan.minimumFuelDepartureDate) },
+        { label: "Leave ASAP Fuel", value: `${formatFuel(plan.leaveNowFuelRequiredKg)} (${plan.leaveNowIsCrewSafe ? "crew-safe" : plan.leaveNowCrewRadiationRisk})` },
         { label: "Shortest-Time Departure", value: formatShortDate(plan.fastestDepartureDate) },
         { label: "Shortest Travel Time", value: formatDays(plan.fastestTravelDays) },
         { label: "Lowest Radiation Leave Time", value: formatShortDate(plan.lowestRadiationDepartureDate) },
@@ -1470,7 +1642,6 @@ function renderRouteStats(plan) {
         { label: "Crew Radiation Dose", value: formatDose(plan.radiationDoseMsv) },
         { label: "Peak Dose Rate", value: formatDoseRate(plan.peakRadiation) },
         { label: "Closest Sun Distance", value: formatAu(plan.closestSunRadiusAu) },
-        { label: "Fuel Remaining", value: formatFuel(Math.max(0, plan.ship.fuelMassKg - plan.fuelRequiredKg)) },
         { label: "Crew Dose Limit", value: formatDose(plan.missionDoseLimitMsv) },
         { label: "Crew Radiation Risk", value: formatRiskLevel(plan.crewRadiationRisk) },
         { label: "Hazard Notes", value: plan.hazardHits.join(", ") || "Clear" }
@@ -1481,6 +1652,7 @@ function renderRouteStats(plan) {
         "Selected Priorities",
         "Minimum Fuel To Make Trip",
         "Lowest Fuel Leave Time",
+        "Leave ASAP Fuel",
         "Shortest-Time Departure",
         "Shortest Travel Time",
         "Lowest Radiation Leave Time",
@@ -1492,7 +1664,6 @@ function renderRouteStats(plan) {
         "Crew Radiation Dose",
         "Peak Dose Rate",
         "Closest Sun Distance",
-        "Fuel Remaining",
         "Crew Dose Limit",
         "Crew Radiation Risk",
         "Hazard Notes"
@@ -1547,10 +1718,12 @@ function planActiveRoute() {
   const plan = estimateRoute(originDescriptor, destinationDescriptor, simDate, ship);
   activeRoutePlan = plan;
 
-  const feasibilityText = plan.feasible
+  const feasibilityText = !plan.hasCrewSafeRoutes
+    ? `No fully crew-safe window was found in the current scan; showing the least hazardous candidate from ${plan.originDescriptor.label} to ${plan.destinationDescriptor.label}`
+    : plan.feasible
     ? `Best transfer route from ${plan.originDescriptor.label} to ${plan.destinationDescriptor.label}`
     : `Current fuel is too low, so this is the closest transfer plan from ${plan.originDescriptor.label} to ${plan.destinationDescriptor.label}`;
-  const preferenceSummary = summarizePreferenceText(plan.preferences) || "time, fuel, and radiation";
+  const preferenceSummary = summarizePreferenceText(plan.preferences) || "crew-safe routing";
 
   routeSummary.textContent =
     `${feasibilityText}. Best time to leave is ${formatShortDate(plan.departureDate)} ` +
@@ -1559,6 +1732,8 @@ function planActiveRoute() {
     `travel for ${formatNumber(plan.travelDays, 1)} days, and ${plan.direction.toLowerCase()}. ` +
     `Estimated total delta-v is ${formatNumber(plan.totalDeltaV, 2)} km/s ` +
     `with ${formatNumber(plan.fuelRequiredKg, 1)} kg of fuel required for the selected route. ` +
+    `The map shows current planet positions plus the future departure and arrival positions for that plan. ` +
+    `If leaving ASAP, fuel required is ${formatFuel(plan.leaveNowFuelRequiredKg)} and crew radiation status is ${plan.leaveNowIsCrewSafe ? "crew-safe" : plan.leaveNowCrewRadiationRisk.toLowerCase()}. ` +
     `Estimated crew radiation dose is ${formatDose(plan.radiationDoseMsv)} against a ${formatDose(plan.missionDoseLimitMsv)} mission limit (${plan.crewRadiationRisk.toLowerCase()}). ` +
     `Minimum fuel to make the trip at all is ${formatNumber(plan.minimumFuelRequiredKg, 1)} kg. ` +
     `For shortest travel time, depart ${formatShortDate(plan.fastestDepartureDate)} and travel for ${formatDays(plan.fastestTravelDays)}. ` +
@@ -1632,6 +1807,29 @@ function scheduleRoutePlanUpdate(statusText) {
   });
 }
 
+function drawRouteMarker(position, scale, centerX, centerY, color, label) {
+  const x = centerX + position.x * scale;
+  const y = centerY + position.y * scale;
+  const labelLines = String(label).split("\n");
+
+  ctx.beginPath();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.arc(x, y, 10, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.fillStyle = color;
+  ctx.arc(x, y, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = color;
+  ctx.font = `700 12px ${UI_FONT}`;
+  labelLines.forEach((line, index) => {
+    ctx.fillText(line, x + 12, y - 12 + index * 14);
+  });
+}
+
 function getCurrentOriginDescriptor() {
   return buildDescriptor(
     originMode.value,
@@ -1670,6 +1868,139 @@ function updateDestinationInputsFromPosition(positionKm) {
   destinationCustomZ.value = (positionKm.z / AU_KM).toFixed(3);
 }
 
+function drawDraggableMarker(position, viewState, options) {
+  const screenPoint = canvasToScreen(position, viewState);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.fillStyle = options.isDragging ? options.activeColor : options.color;
+  ctx.strokeStyle = "rgba(255,255,255,0.95)";
+  ctx.lineWidth = 2;
+  ctx.arc(screenPoint.x, screenPoint.y, 7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = options.ringColor;
+  ctx.arc(screenPoint.x, screenPoint.y, 14, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.fillStyle = options.textColor;
+  ctx.font = `700 12px ${UI_FONT}`;
+  ctx.fillText(options.label, screenPoint.x + 12, screenPoint.y + 16);
+
+  return screenPoint;
+}
+
+function getMarkerLabel(type) {
+  return type === "origin" ? "Ship" : "Destination";
+}
+
+function drawOriginMarker(simDate, viewState) {
+  const originDescriptor = getCurrentOriginDescriptor();
+  const originState = resolveDescriptorState(originDescriptor, simDate);
+
+  return drawDraggableMarker(originState.position, viewState, {
+    label: getMarkerLabel("origin"),
+    color: "#80ffce",
+    activeColor: "#8ec5ff",
+    ringColor: "rgba(128, 255, 206, 0.55)",
+    textColor: "#d8fff1",
+    isDragging: dragTarget === "origin"
+  });
+}
+
+function drawDestinationMarker(simDate, viewState) {
+  const destinationDescriptor = getCurrentDestinationDescriptor();
+  const destinationState = resolveDescriptorState(destinationDescriptor, simDate);
+
+  return drawDraggableMarker(destinationState.position, viewState, {
+    label: getMarkerLabel("destination"),
+    color: "#ffd166",
+    activeColor: "#ffc98d",
+    ringColor: "rgba(255, 209, 102, 0.55)",
+    textColor: "#fff0c2",
+    isDragging: dragTarget === "destination"
+  });
+}
+
+function drawRouteOverlay(simDate, centerX, centerY, scale) {
+  if (!activeRoutePlan) {
+    return;
+  }
+
+  const departurePoint = activeRoutePlan.departureState.position;
+  const arrivalPoint = activeRoutePlan.arrivalState.position;
+  const routePoints = buildDisplayedRoutePoints(departurePoint, arrivalPoint);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.setLineDash([10, 8]);
+  ctx.strokeStyle = activeRoutePlan.feasible ? "rgba(120, 255, 206, 0.95)" : "rgba(255, 176, 120, 0.95)";
+  ctx.lineWidth = 2.5;
+  routePoints.forEach((point, index) => {
+    const x = centerX + point.x * scale;
+    const y = centerY + point.y * scale;
+    if (index === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
+  });
+  ctx.stroke();
+  ctx.restore();
+
+  drawRouteMarker(
+    departurePoint,
+    scale,
+    centerX,
+    centerY,
+    "#9cf6ff",
+    `Depart ${activeRoutePlan.originDescriptor.label}\n${formatMapDate(activeRoutePlan.departureDate)}`
+  );
+  drawRouteMarker(
+    arrivalPoint,
+    scale,
+    centerX,
+    centerY,
+    "#ffc98d",
+    `Arrive ${activeRoutePlan.destinationDescriptor.label}\n${formatMapDate(activeRoutePlan.arrivalDate)}`
+  );
+}
+
+function buildDisplayedRoutePoints(startPosition, endPosition) {
+  const points = [];
+  const startRadius = Math.max(startPosition.norm(), MIN_CREW_SAFE_SOLAR_DISTANCE_AU * AU_KM);
+  const endRadius = Math.max(endPosition.norm(), MIN_CREW_SAFE_SOLAR_DISTANCE_AU * AU_KM);
+  const startAngle = Math.atan2(startPosition.y, startPosition.x);
+  const endAngle = Math.atan2(endPosition.y, endPosition.x);
+  let angleDelta = normalizeAngleRad(endAngle - startAngle);
+
+  if (Math.abs(angleDelta) > Math.PI * 0.92) {
+    angleDelta = angleDelta > 0 ? angleDelta - Math.PI * 2 : angleDelta + Math.PI * 2;
+  }
+
+  const minRouteRadius = MIN_CREW_SAFE_SOLAR_DISTANCE_AU * AU_KM * 1.08;
+
+  for (let i = 0; i <= 64; i += 1) {
+    const t = i / 64;
+    const eased = (1 - Math.cos(Math.PI * t)) / 2;
+    const angle = startAngle + angleDelta * eased;
+    const linearRadius = startRadius + (endRadius - startRadius) * t;
+    const outwardArc = Math.sin(Math.PI * t) * Math.max(startRadius, endRadius) * 0.18;
+    const radius = Math.max(minRouteRadius, linearRadius + outwardArc);
+    points.push(new BrowserVec3(
+      Math.cos(angle) * radius,
+      Math.sin(angle) * radius,
+      startPosition.z + (endPosition.z - startPosition.z) * t
+    ));
+  }
+
+  return points;
+}
+
 function drawSolarSystem(simDate) {
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
@@ -1700,6 +2031,10 @@ function drawSolarSystem(simDate) {
   const mercuryOrbitPx = spice.getBodyInfo("MERCURY").a * AU_KM * scale;
   const sunGlowRadius = Math.min(sunRadius * 2.2, mercuryOrbitPx * 0.72);
   const glow = ctx.createRadialGradient(centerX, centerY, Math.max(4, sunRadius * 0.45), centerX, centerY, sunGlowRadius);
+  const sunRadius = getSunDisplayRadius(simDate, scale);
+  const mercuryOrbitPx = spice.getBodyInfo("MERCURY").a * AU_KM * scale;
+  const sunGlowRadius = Math.min(sunRadius * 2.2, mercuryOrbitPx * 0.72);
+  const glow = ctx.createRadialGradient(centerX, centerY, Math.max(4, sunRadius * 0.45), centerX, centerY, sunGlowRadius);
   glow.addColorStop(0, "rgba(255, 220, 120, 1)");
   glow.addColorStop(0.3, "rgba(255, 190, 90, 0.8)");
   glow.addColorStop(0.65, "rgba(255, 160, 70, 0.2)");
@@ -1708,14 +2043,18 @@ function drawSolarSystem(simDate) {
   ctx.beginPath();
   ctx.fillStyle = glow;
   ctx.arc(centerX, centerY, sunGlowRadius, 0, Math.PI * 2);
+  ctx.arc(centerX, centerY, sunGlowRadius, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.beginPath();
   ctx.fillStyle = "#ffce66";
   ctx.arc(centerX, centerY, sunRadius, 0, Math.PI * 2);
+  ctx.arc(centerX, centerY, sunRadius, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.fillStyle = "white";
+  ctx.font = `700 14px ${UI_FONT}`;
+  ctx.fillText("Sun", centerX - Math.max(14, sunRadius * 0.9), centerY - (sunRadius + 12));
   ctx.font = `700 14px ${UI_FONT}`;
   ctx.fillText("Sun", centerX - Math.max(14, sunRadius * 0.9), centerY - (sunRadius + 12));
 
@@ -1734,14 +2073,19 @@ function drawSolarSystem(simDate) {
     if (name === "SATURN") {
       const ringRadiusX = radius * 1.95;
       const ringRadiusY = Math.max(radius * 0.72, 6);
+      const ringRadiusX = radius * 1.95;
+      const ringRadiusY = Math.max(radius * 0.72, 6);
       ctx.beginPath();
       ctx.strokeStyle = "rgba(231, 210, 141, 0.9)";
+      ctx.lineWidth = Math.max(1.8, radius * 0.16);
+      ctx.ellipse(px, py, ringRadiusX, ringRadiusY, -0.4, 0, Math.PI * 2);
       ctx.lineWidth = Math.max(1.8, radius * 0.16);
       ctx.ellipse(px, py, ringRadiusX, ringRadiusY, -0.4, 0, Math.PI * 2);
       ctx.stroke();
     }
 
     ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.font = `12px ${UI_FONT}`;
     ctx.font = `12px ${UI_FONT}`;
     ctx.fillText(getPlanetDisplayName(name), px + 8, py - 8);
 
@@ -1781,6 +2125,7 @@ function updateUI(simDate) {
   });
 
   if (selectedPlanetName) {
+    populatePlanetOverview(selectedPlanetName, simDate);
     populatePlanetOverview(selectedPlanetName, simDate);
   }
 }
@@ -1937,6 +2282,11 @@ window.addEventListener("keydown", (event) => {
     return;
   }
 
+  if (event.key === "Escape" && selectedPlanetName) {
+    hidePlanetInfo();
+    return;
+  }
+
   if (event.key === "Escape" && !plannerModal.classList.contains("hidden")) {
     setPlannerOpen(false);
   }
@@ -1944,6 +2294,22 @@ window.addEventListener("keydown", (event) => {
 
 originMode.addEventListener("change", syncModeVisibility);
 destinationMode.addEventListener("change", syncModeVisibility);
+preferTimeInput?.addEventListener("change", () => {
+  queueRoutePlan({
+    pendingSummary: "Recalculating route with updated time preference...",
+    statusText: preferTimeInput.checked
+      ? "Shortest travel time preference enabled."
+      : "Shortest travel time preference disabled."
+  });
+});
+preferFuelInput?.addEventListener("change", () => {
+  queueRoutePlan({
+    pendingSummary: "Recalculating route with updated fuel preference...",
+    statusText: preferFuelInput.checked
+      ? "Lowest fuel preference enabled."
+      : "Lowest fuel preference disabled."
+  });
+});
 
 swapRouteBtn.addEventListener("click", () => {
   swapRouteSelections();
@@ -1952,11 +2318,12 @@ swapRouteBtn.addEventListener("click", () => {
 
 planRouteBtn.addEventListener("click", () => {
   queueRoutePlan({
-    pendingSummary: "Calculating the fastest gravity-assisted route...",
-    statusText: "Fastest route updated."
+    pendingSummary: "Calculating the best crew-safe route...",
+    statusText: "Optimized route updated."
   });
 });
 
+window.addEventListener("resize", () => scheduleCanvasResize(true));
 window.addEventListener("resize", () => scheduleCanvasResize(true));
 
 canvas.addEventListener("wheel", (event) => {
@@ -1976,6 +2343,8 @@ canvas.addEventListener("pointerdown", (event) => {
   const destinationState = resolveDescriptorState(getCurrentDestinationDescriptor(), getCurrentSimTime());
   const originMarker = canvasToScreen(originState.position, lastViewState);
   const destinationMarker = canvasToScreen(destinationState.position, lastViewState);
+  const originLabel = getMarkerLabel("origin");
+  const destinationLabel = getMarkerLabel("destination");
   const originLabel = getMarkerLabel("origin");
   const destinationLabel = getMarkerLabel("destination");
   const originDistance = pointHitsMarker(pointer, originMarker, originLabel);
@@ -2107,8 +2476,24 @@ planetEndpointBtn?.addEventListener("click", () => {
   });
   hidePlanetInfo();
 });
+planetEndpointBtn?.addEventListener("click", () => {
+  if (!selectedPlanetName) {
+    return;
+  }
+
+  destinationMode.value = "body";
+  destinationBody.value = selectedPlanetName;
+  syncModeVisibility();
+  queueRoutePlan({
+    pendingSummary: `Updating route to ${getPlanetDisplayName(selectedPlanetName)}...`,
+    statusText: `Destination set to ${getPlanetDisplayName(selectedPlanetName)}.`
+  });
+  hidePlanetInfo();
+});
 
 function initializeApp() {
+  resetViewportScroll();
+  resetPlanetOverviewScroll();
   resetViewportScroll();
   resetPlanetOverviewScroll();
   customTimeInput.value = formatDateForInput(new Date());
@@ -2117,10 +2502,12 @@ function initializeApp() {
   }
   createAsteroids();
   observeCanvasLayout();
+  observeCanvasLayout();
   syncModeVisibility();
   setControlMenuOpen(false);
   setPlannerOpen(false);
   updateZoomDisplay();
+  scheduleCanvasResize(true);
   scheduleCanvasResize(true);
 
   queueRoutePlan({
