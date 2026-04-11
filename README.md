@@ -15,7 +15,10 @@ Some problems with it is that:
 
 Our goal is to improve this system so that it can be used by the people on the spaceship as well and so that there is tracking within the spaceship to make it less troublesome in the case that communication is lost or takes too long when immediate action is needed
 
-**Background Info**
+
+
+
+## Background Info
 
 At its core, SGM is an app that lets the user plan their ship's trajectories and chart the fastest, safest, and most efficient route in terms of its fuel usage. This app seeks to aide the future of space travel, where mission parameters may change. Sometimes, life or death decisions won't wait for a response from back on earth, which may take dasys to arrive. Sometimes astronauths need to make them, without having the time to wait. This is what SGM is trying to fix. 
 
@@ -30,4 +33,42 @@ One of the things we are most proud of is how simplistic we made our UI look, wh
 Through all this, we learned how to use javascript better, alongside how to research better. We also learned how to design a good looking UI, and especially make it really interactive. Although not perfect, we are really proud of what we made.
 
 There are still lots of things that can be improved upon from this app. One of which is when the time comes, I know that this app can be used as the backbone of interstellar travel, even beyond our star. It can also make space travel easier one day, when we get advanced enough, where even civillians have access to it, and not just governments.
+
+
+
+
+
+## Sources and References
+
+### Books
+- **Orbital Mechanics for Engineering Students** by Howard D. Curtis:  
+  [Elsevier Book Page](https://www.elsevier.com/books/orbital-mechanics-for-engineering-students/curtis/978-0-08-102133-0)  
+  [Amazon Link](https://www.amazon.com/Orbital-Mechanics-Engineering-Students-Howard/dp/0123747783)
+
+### Key Formulas and Concepts
+- **Newton's Law of Universal Gravitation**:  
+  [Wikipedia](https://en.wikipedia.org/wiki/Newton%27s_law_of_universal_gravitation)
+
+- **Vis-Viva Equation** (for orbital speeds):  
+  [Wikipedia](https://en.wikipedia.org/wiki/Vis-viva_equation)
+
+- **Tsiolkovsky Rocket Equation**:  
+  [Wikipedia](https://en.wikipedia.org/wiki/Tsiolkovsky_rocket_equation)
+
+- **Sphere of Influence (Hill Sphere/Laplace Sphere)**:  
+  [Wikipedia](https://en.wikipedia.org/wiki/Sphere_of_influence_(astrodynamics))
+
+- **Keplerian Orbital Elements**:  
+  [Wikipedia](https://en.wikipedia.org/wiki/Orbital_elements)
+
+- **Kepler's Laws of Planetary Motion**:  
+  [Wikipedia](https://en.wikipedia.org/wiki/Kepler%27s_laws_of_planetary_motion)
+
+### Additional Resources
+- **NASA SPICE Toolkit** (used for ephemeris data):  
+  [Official Site](https://naif.jpl.nasa.gov/naif/toolkit.html)
+
+- **Patched Conics Approximation** (for trajectory modeling):  
+  [Wikipedia](https://en.wikipedia.org/wiki/Patched_conics_approximation)
+
 
