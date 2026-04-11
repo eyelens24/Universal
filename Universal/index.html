@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Universal Mission Control</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="mission-control-page">
+  <div class="ui mission-shell">
+    <div class="mission-topbar">
+      <div class="mission-brand-row">
+        <div id="controlMenuBtn" class="control-menu-btn" role="button" tabindex="0" aria-label="Control" aria-controls="missionControls" aria-expanded="false">
+          <span class="menu-icon" aria-hidden="true"></span>
+        </div>
+        <div class="mission-brand">
+          <h1>UNIVERSAL</h1>
+          <p>Mission Control</p>
+        </div>
+      </div>
+
+      <div class="controls mission-controls" id="missionControls" aria-hidden="true">
+        <div class="nav-control-card nav-time-card">
+          <div class="control-field speed-field">
+            <label for="speedInput">Speed</label>
+            <input id="speedInput" type="number" min="0.01" step="0.01" value="1" />
+          </div>
+          <div class="control-field mission-time-field">
+            <label for="customTime">Mission Time</label>
+            <input type="datetime-local" id="customTime" step="1" />
+          </div>
+          <button id="applyTimeBtn">Apply</button>
+        </div>
+        <div class="sim-time-chip">
+          <span class="sim-time-label">Simulation Time</span>
+          <span id="simTimeDisplay" class="sim-time-value">Loading...</span>
+        </div>
+        <div class="nav-control-card planner-preview">
+          <span class="card-label">Trajectory Tools</span>
+          <button id="openPlannerBtn" type="button">Plan Route</button>
+        </div>
+        <div class="zoom-controls">
+          <span class="zoom-label">Zoom</span>
+          <button id="zoomOutBtn" type="button">-</button>
+          <span id="zoomDisplay" class="zoom-display">1.00×</span>
+          <button id="zoomInBtn" type="button">+</button>
+        </div>
+      </div>
+
+      <div class="mission-actions">
+        <button id="nowBtn">Use Current Time</button>
+        <button id="togglePauseBtn">Pause</button>
+      </div>
+    </div>
+
+    <div class="mission-layout">
+      <section class="mission-main">
+        <div class="canvas-wrap mission-canvas-wrap">
+          <canvas id="solarCanvas" width="1000" height="1000"></canvas>
+          <section id="planetInfo" class="planet-overview hidden" aria-hidden="true" aria-live="polite">
+            <div class="planet-overview-surface"></div>
+            <div class="planet-overview-panel">
+              <div class="planet-overview-header">
+                <button id="closePlanetInfoBtn" class="planet-overview-close" type="button" aria-label="Close planet overview">Close</button>
+                <button id="planetEndpointBtn" class="planet-overview-endpoint" type="button">Set Endpoint</button>
+              </div>
+
+              <div class="planet-overview-copy">
+                <h2 id="planetName" class="planet-overview-title">Selected Planet</h2>
+              </div>
+
+              <div class="planet-overview-grid">
+                <div class="planet-overview-stat planet-overview-stat-size">
+                  <span class="planet-overview-label">Size</span>
+                  <span id="planetSize" class="planet-overview-value">Awaiting target lock</span>
+                </div>
+                <div class="planet-overview-stat planet-overview-stat-temp">
+                  <span class="planet-overview-label">Temperature</span>
+                  <span id="planetTemp" class="planet-overview-value">Awaiting target lock</span>
+                </div>
+                <div class="planet-overview-visual">
+                  <img id="planetOverviewImage" src="" alt="" />
+                </div>
+                <div class="planet-overview-stat planet-overview-stat-distance">
+                  <span class="planet-overview-label">Distance from Earth</span>
+                  <span id="planetDistance" class="planet-overview-value">Awaiting target lock</span>
+                </div>
+                <div class="planet-overview-stat planet-overview-stat-elements">
+                  <span class="planet-overview-label">Composition</span>
+                  <span id="planetElements" class="planet-overview-value">Awaiting target lock</span>
+                </div>
+              </div>
+            </div>
+          </section>
+          <div class="canvas-hint">
+            Scroll to zoom at the cursor. Drag empty space to pan. Drag the ship or destination markers to explore routes. Click a planet for target intelligence.
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="plannerModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" id="plannerBackdrop"></div>
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="plannerTitle">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow">Navigation Console</p>
+          <h2 id="plannerTitle">Trajectory Planner</h2>
+          <p>Plot where you are, where you want to go, and the fastest route your ship can fly.</p>
+        </div>
+        <button id="closePlannerBtn" class="modal-close" type="button" aria-label="Close trajectory planner">Close</button>
+      </div>
+
+      <div class="planner-grid">
+        <div class="planner-card origin-card">
+          <h3>Origin</h3>
+          <div class="planner-field-grid two-fields">
+            <div class="planner-field">
+              <label for="originMode">Plot from</label>
+              <select id="originMode">
+                <option value="body">Planet</option>
+                <option value="custom">Custom coordinates</option>
+              </select>
+            </div>
+
+            <div id="originBodyGroup" class="planner-field">
+              <label for="originBody">Body</label>
+              <select id="originBody">
+                <option value="MERCURY">Mercury</option>
+                <option value="VENUS">Venus</option>
+                <option value="EARTH" selected>Earth</option>
+                <option value="MARS">Mars</option>
+                <option value="JUPITER">Jupiter</option>
+                <option value="SATURN">Saturn</option>
+                <option value="URANUS">Uranus</option>
+                <option value="NEPTUNE">Neptune</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="originCustomGroup" class="custom-coords hidden">
+            <label for="originCustomX">X (AU)</label>
+            <input id="originCustomX" type="number" step="0.001" value="1" />
+            <label for="originCustomY">Y (AU)</label>
+            <input id="originCustomY" type="number" step="0.001" value="0" />
+            <label for="originCustomZ">Z (AU)</label>
+            <input id="originCustomZ" type="number" step="0.001" value="0" />
+          </div>
+        </div>
+
+        <div class="planner-card destination-card">
+          <h3>Destination</h3>
+          <div class="planner-field-grid two-fields">
+            <div class="planner-field">
+              <label for="destinationMode">Plot to</label>
+              <select id="destinationMode">
+                <option value="body">Planet</option>
+                <option value="custom">Custom coordinates</option>
+              </select>
+            </div>
+
+            <div id="destinationBodyGroup" class="planner-field">
+              <label for="destinationBody">Body</label>
+              <select id="destinationBody">
+                <option value="MERCURY">Mercury</option>
+                <option value="VENUS">Venus</option>
+                <option value="EARTH">Earth</option>
+                <option value="MARS" selected>Mars</option>
+                <option value="JUPITER">Jupiter</option>
+                <option value="SATURN">Saturn</option>
+                <option value="URANUS">Uranus</option>
+                <option value="NEPTUNE">Neptune</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="destinationCustomGroup" class="custom-coords hidden">
+            <label for="destinationCustomX">X (AU)</label>
+            <input id="destinationCustomX" type="number" step="0.001" value="1.524" />
+            <label for="destinationCustomY">Y (AU)</label>
+            <input id="destinationCustomY" type="number" step="0.001" value="0" />
+            <label for="destinationCustomZ">Z (AU)</label>
+            <input id="destinationCustomZ" type="number" step="0.001" value="0" />
+          </div>
+        </div>
+
+        <div class="planner-card ship-card">
+          <h3>Ship + Mission</h3>
+          <div class="planner-field-grid three-fields">
+            <div class="planner-field">
+              <label for="dryMassInput">Dry Mass (kg)</label>
+              <input id="dryMassInput" type="number" min="1" step="10" value="1000" />
+            </div>
+            <div class="planner-field">
+              <label for="fuelMassInput">Fuel Mass (kg)</label>
+              <input id="fuelMassInput" type="number" min="0" step="10" value="300" />
+            </div>
+            <div class="planner-field">
+              <label for="ispInput">Engine Isp (s)</label>
+              <input id="ispInput" type="number" min="1" step="1" value="340" />
+            </div>
+          </div>
+          <div class="ship-action-grid">
+            <div class="planner-priority-group">
+              <span class="planner-priority-label">Optimize for</span>
+              <label><input id="preferTimeInput" type="checkbox" checked /> Shortest travel time</label>
+              <label><input id="preferFuelInput" type="checkbox" checked /> Lowest fuel</label>
+            </div>
+            <div class="planner-buttons">
+              <button id="swapRouteBtn" type="button">Swap Route</button>
+              <button id="planRouteBtn" type="button">Plan Best Route</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="route-output">
+        <h3>Guidance</h3>
+        <p id="routeSummary">Choose an origin and destination, then generate a route.</p>
+        <div class="route-stats" id="routeStats"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    window.addEventListener("error", function (event) {
+      const simTime = document.getElementById("simTimeDisplay");
+      if (simTime) simTime.textContent = "Startup error";
+    });
+
+    window.addEventListener("unhandledrejection", function (event) {
+      const simTime = document.getElementById("simTimeDisplay");
+      if (simTime) simTime.textContent = "Startup error";
+    });
+  </script>
+  <script src="spice-browser.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
