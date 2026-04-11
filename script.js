@@ -25,6 +25,7 @@ const openPlannerBtn = document.getElementById("openPlannerBtn");
 const closePlannerBtn = document.getElementById("closePlannerBtn");
 const plannerModal = document.getElementById("plannerModal");
 const plannerBackdrop = document.getElementById("plannerBackdrop");
+const planetOverviewPanel = document.querySelector(".planet-overview-panel");
 
 const originMode = document.getElementById("originMode");
 const originBody = document.getElementById("originBody");
@@ -54,12 +55,13 @@ const routeSummary = document.getElementById("routeSummary");
 const routeStats = document.getElementById("routeStats");
 const planetInfo = document.getElementById("planetInfo");
 const closePlanetInfoBtn = document.getElementById("closePlanetInfoBtn");
-const planetBadge = document.getElementById("planetBadge");
+const planetEndpointBtn = document.getElementById("planetEndpointBtn");
 const planetName = document.getElementById("planetName");
 const planetDistance = document.getElementById("planetDistance");
 const planetSize = document.getElementById("planetSize");
 const planetTemp = document.getElementById("planetTemp");
 const planetElements = document.getElementById("planetElements");
+const planetOverviewImage = document.getElementById("planetOverviewImage");
 
 const BrowserVec3 = window.Vec3;
 const createBrowserSpiceEnvironment = window.createSpiceEnvironment;
@@ -132,6 +134,19 @@ const PLANET_INTELLIGENCE = {
   }
 };
 
+const PLANET_IMAGE_PATHS = {
+  MERCURY: "assets/mercury.png",
+  VENUS: "assets/venus.png",
+  EARTH: "assets/earth.png",
+  MARS: "assets/mars.png",
+  JUPITER: "assets/jupiter.png",
+  SATURN: "assets/saturn.png",
+  URANUS: "assets/uranus.png",
+  NEPTUNE: "assets/neptune.png"
+};
+
+const UI_FONT = "\"Science Gothic\", Arial, sans-serif";
+
 let usingRealTime = true;
 let paused = false;
 let timeScale = 1;
@@ -153,15 +168,24 @@ let isPlanningRoute = false;
 let selectedPlanetName = null;
 let pointerMovedDuringDrag = false;
 let lastPlanetHitTargets = [];
+let planetOverviewTimer = null;
 
 const asteroidImg = new Image();
 asteroidImg.src = "assets/asteroid.png";
+
+Object.values(PLANET_IMAGE_PATHS).forEach((path) => {
+  const image = new Image();
+  image.src = path;
+});
 
 const asteroidBeltInner = 180;
 const asteroidBeltOuter = 205;
 const asteroidCount = 140;
 const asteroids = [];
 const stars = [];
+let canvasResizeFrame = null;
+let canvasResizeObserver = null;
+let canvasResizeTimeout = null;
 
 function createAsteroids() {
   asteroids.length = 0;
@@ -199,15 +223,65 @@ function createStarField(width, height) {
 
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
+  if (!(rect.width > 0) || !(rect.height > 0)) {
+    return;
+  }
 
-  canvas.width = rect.width * dpr;
-  canvas.height = rect.height * dpr;
+  const dpr = window.devicePixelRatio || 1;
+  const nextWidth = Math.round(rect.width * dpr);
+  const nextHeight = Math.round(rect.height * dpr);
+
+  if (canvas.width === nextWidth && canvas.height === nextHeight) {
+    return;
+  }
+
+  canvas.width = nextWidth;
+  canvas.height = nextHeight;
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.scale(dpr, dpr);
 
   createStarField(rect.width, rect.height);
+}
+
+function scheduleCanvasResize(immediate = false) {
+  if (canvasResizeFrame !== null) {
+    return;
+  }
+
+  if (immediate) {
+    canvasResizeFrame = requestAnimationFrame(() => {
+      canvasResizeFrame = null;
+      resizeCanvas();
+    });
+    return;
+  }
+
+  if (canvasResizeTimeout !== null) {
+    clearTimeout(canvasResizeTimeout);
+  }
+
+  canvasResizeTimeout = setTimeout(() => {
+    canvasResizeTimeout = null;
+    canvasResizeFrame = requestAnimationFrame(() => {
+      canvasResizeFrame = null;
+      resizeCanvas();
+    });
+  }, 80);
+}
+
+function observeCanvasLayout() {
+  if (typeof ResizeObserver !== "function") {
+    return;
+  }
+
+  canvasResizeObserver = new ResizeObserver(() => {
+    scheduleCanvasResize();
+  });
+
+  if (canvas.parentElement) {
+    canvasResizeObserver.observe(canvas.parentElement);
+  }
 }
 
 function getCurrentSimTime() {
@@ -448,61 +522,218 @@ function getBodyState(name, simDate) {
 }
 
 function getPlanetRadius(name) {
-  switch (name) {
-    case "VENUS":
-    case "EARTH":
-      return 6;
-    case "MARS":
-      return 5;
-    case "JUPITER":
-      return 11;
-    case "SATURN":
-      return 10;
-    case "URANUS":
-    case "NEPTUNE":
-      return 8;
-    default:
-      return 4;
-  }
+  const baseRadius = (() => {
+    switch (name) {
+      case "VENUS":
+      case "EARTH":
+        return 6;
+      case "MARS":
+        return 5;
+      case "JUPITER":
+        return 11;
+      case "SATURN":
+        return 10;
+      case "URANUS":
+      case "NEPTUNE":
+        return 8;
+      default:
+        return 4;
+    }
+  })();
+
+  const zoomBoost = 0.25 + Math.pow(Math.max(zoomLevel, 0.5), 0.95) * 0.75;
+  return clamp(baseRadius * zoomBoost, baseRadius * 0.8, baseRadius * 12);
+}
+
+function getSunDisplayRadius(simDate, scale) {
+  const baseRadius = 16;
+  const zoomBoost = 0.32 + Math.pow(Math.max(zoomLevel, 0.5), 0.92) * 0.78;
+  const mercuryOrbitPx = spice.getBodyInfo("MERCURY").a * AU_KM * scale;
+  const desiredRadius = baseRadius * zoomBoost;
+  const maxRadius = Math.max(baseRadius * 0.9, mercuryOrbitPx * 0.32);
+
+  return clamp(desiredRadius, baseRadius * 0.9, maxRadius);
 }
 
 function getPlanetDisplayName(name) {
   return name.charAt(0) + name.slice(1).toLowerCase();
 }
 
-function hidePlanetInfo() {
-  planetInfo?.classList.add("hidden");
-  selectedPlanetName = null;
-}
-
-function showPlanetInfo(name, simDate = getCurrentSimTime()) {
+function getPlanetOverviewData(name, simDate = getCurrentSimTime()) {
   const info = spice.getBodyInfo(name);
   const state = getBodyState(name, simDate);
   const earthState = getBodyState("EARTH", simDate);
   const distanceFromEarthAu = state.position.sub(earthState.position).norm() / AU_KM;
   const intel = PLANET_INTELLIGENCE[name];
 
-  selectedPlanetName = name;
-  if (planetBadge) {
-    planetBadge.textContent = getPlanetDisplayName(name).slice(0, 2).toUpperCase();
-    planetBadge.style.background = `linear-gradient(135deg, ${info.color}, rgba(255,255,255,0.9))`;
+  return {
+    info,
+    imagePath: PLANET_IMAGE_PATHS[name],
+    displayName: getPlanetDisplayName(name),
+    distanceFromEarthAu,
+    sizeText: `${formatKm(info.radiusKm)} radius`,
+    temperatureText: intel?.temperature || "No thermal profile available",
+    elementsText: intel?.elements || "No composition data available"
+  };
+}
+
+function clearPlanetOverviewTimer() {
+  if (planetOverviewTimer) {
+    clearTimeout(planetOverviewTimer);
+    planetOverviewTimer = null;
   }
+}
+
+function resetViewportScroll() {
+  if ("scrollRestoration" in window.history) {
+    window.history.scrollRestoration = "manual";
+  }
+
+  window.scrollTo(0, 0);
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+}
+
+function resetPlanetOverviewScroll() {
+  if (planetOverviewPanel) {
+    planetOverviewPanel.scrollTop = 0;
+  }
+}
+
+function hidePlanetInfo() {
+  clearPlanetOverviewTimer();
+  planetInfo?.classList.remove("is-open");
+  planetInfo?.setAttribute("aria-hidden", "true");
+  resetPlanetOverviewScroll();
+
+  planetOverviewTimer = setTimeout(() => {
+    planetInfo?.classList.add("hidden");
+    planetOverviewTimer = null;
+  }, 220);
+
+  selectedPlanetName = null;
+}
+
+function populatePlanetOverview(name, simDate = getCurrentSimTime()) {
+  const data = getPlanetOverviewData(name, simDate);
+
+  selectedPlanetName = name;
   if (planetName) {
-    planetName.textContent = getPlanetDisplayName(name);
+    planetName.textContent = data.displayName;
   }
   if (planetDistance) {
-    planetDistance.textContent = name === "EARTH" ? "0 AU" : formatAu(distanceFromEarthAu);
+    planetDistance.textContent = name === "EARTH" ? "0 AU" : formatAu(data.distanceFromEarthAu);
   }
   if (planetSize) {
-    planetSize.textContent = `${formatKm(info.radiusKm)} radius`;
+    planetSize.textContent = data.sizeText;
   }
   if (planetTemp) {
-    planetTemp.textContent = intel?.temperature || "No thermal profile available";
+    planetTemp.textContent = data.temperatureText;
   }
   if (planetElements) {
-    planetElements.textContent = intel?.elements || "No composition data available";
+    planetElements.textContent = data.elementsText;
   }
+  if (planetOverviewImage) {
+    planetOverviewImage.src = data.imagePath;
+    planetOverviewImage.alt = `${data.displayName} planet render`;
+  }
+}
+
+function showPlanetInfo(name) {
+  clearPlanetOverviewTimer();
+  populatePlanetOverview(name);
   planetInfo?.classList.remove("hidden");
+  planetInfo?.setAttribute("aria-hidden", "false");
+  resetViewportScroll();
+  resetPlanetOverviewScroll();
+
+  requestAnimationFrame(() => {
+    resetPlanetOverviewScroll();
+    planetInfo?.classList.add("is-open");
+  });
+}
+
+function getMarkerLabel(type) {
+  return type === "origin" ? "Ship" : "Destination";
+}
+
+function drawDraggableMarker(position, viewState, options) {
+  const screenPoint = canvasToScreen(position, viewState);
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.fillStyle = options.isDragging ? options.activeColor : options.color;
+  ctx.strokeStyle = "rgba(255,255,255,0.95)";
+  ctx.lineWidth = 2;
+  ctx.arc(screenPoint.x, screenPoint.y, 7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.setLineDash([4, 4]);
+  ctx.strokeStyle = options.ringColor;
+  ctx.arc(screenPoint.x, screenPoint.y, 14, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.fillStyle = options.textColor;
+  ctx.font = `700 12px ${UI_FONT}`;
+  ctx.fillText(options.label, screenPoint.x + 12, screenPoint.y + 16);
+
+  return screenPoint;
+}
+
+function drawOriginMarker(simDate, viewState) {
+  const originDescriptor = getCurrentOriginDescriptor();
+  const originState = resolveDescriptorState(originDescriptor, simDate);
+
+  return drawDraggableMarker(originState.position, viewState, {
+    label: getMarkerLabel("origin"),
+    color: "#80ffce",
+    activeColor: "#8ec5ff",
+    ringColor: "rgba(128, 255, 206, 0.55)",
+    textColor: "#d8fff1",
+    isDragging: dragTarget === "origin"
+  });
+}
+
+function drawDestinationMarker(simDate, viewState) {
+  const destinationDescriptor = getCurrentDestinationDescriptor();
+  const destinationState = resolveDescriptorState(destinationDescriptor, simDate);
+
+  return drawDraggableMarker(destinationState.position, viewState, {
+    label: getMarkerLabel("destination"),
+    color: "#ffd166",
+    activeColor: "#ffc98d",
+    ringColor: "rgba(255, 209, 102, 0.55)",
+    textColor: "#fff0c2",
+    isDragging: dragTarget === "destination"
+  });
+}
+
+function drawRouteOverlay(simDate, centerX, centerY, scale) {
+  if (!activeRoutePlan) {
+    return;
+  }
+
+  const currentOriginState = resolveDescriptorState(activeRoutePlan.originDescriptor, simDate);
+  const currentDestinationState = resolveDescriptorState(activeRoutePlan.destinationDescriptor, simDate);
+  const startX = centerX + currentOriginState.position.x * scale;
+  const startY = centerY + currentOriginState.position.y * scale;
+  const endX = centerX + currentDestinationState.position.x * scale;
+  const endY = centerY + currentDestinationState.position.y * scale;
+  const controlX = (startX + endX) / 2;
+  const controlY = (startY + endY) / 2 - Math.min(canvas.clientWidth, canvas.clientHeight) * 0.08;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.setLineDash([10, 8]);
+  ctx.strokeStyle = activeRoutePlan.feasible ? "rgba(120, 255, 206, 0.95)" : "rgba(255, 176, 120, 0.95)";
+  ctx.lineWidth = 2.5;
+  ctx.moveTo(startX, startY);
+  ctx.quadraticCurveTo(controlX, controlY, endX, endY);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function getPlanetDrawData(name, simDate, scale) {
@@ -1401,26 +1632,6 @@ function scheduleRoutePlanUpdate(statusText) {
   });
 }
 
-function drawRouteMarker(position, scale, centerX, centerY, color, label) {
-  const x = centerX + position.x * scale;
-  const y = centerY + position.y * scale;
-
-  ctx.beginPath();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 2.5;
-  ctx.arc(x, y, 10, 0, Math.PI * 2);
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.fillStyle = color;
-  ctx.arc(x, y, 3, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = color;
-  ctx.font = "bold 12px Arial";
-  ctx.fillText(label, x + 12, y - 10);
-}
-
 function getCurrentOriginDescriptor() {
   return buildDescriptor(
     originMode.value,
@@ -1459,93 +1670,6 @@ function updateDestinationInputsFromPosition(positionKm) {
   destinationCustomZ.value = (positionKm.z / AU_KM).toFixed(3);
 }
 
-function drawDraggableMarker(position, viewState, options) {
-  const screenPoint = canvasToScreen(position, viewState);
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.fillStyle = options.isDragging ? options.activeColor : options.color;
-  ctx.strokeStyle = "rgba(255,255,255,0.95)";
-  ctx.lineWidth = 2;
-  ctx.arc(screenPoint.x, screenPoint.y, 7, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.beginPath();
-  ctx.setLineDash([4, 4]);
-  ctx.strokeStyle = options.ringColor;
-  ctx.arc(screenPoint.x, screenPoint.y, 14, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.restore();
-
-  ctx.fillStyle = options.textColor;
-  ctx.font = "bold 12px Arial";
-  ctx.fillText(options.label, screenPoint.x + 12, screenPoint.y + 16);
-
-  return screenPoint;
-}
-
-function drawOriginMarker(simDate, viewState) {
-  const originDescriptor = getCurrentOriginDescriptor();
-  const originState = resolveDescriptorState(originDescriptor, simDate);
-
-  return drawDraggableMarker(originState.position, viewState, {
-    label: originDescriptor.mode === "custom" ? "Ship" : "Origin",
-    color: "#80ffce",
-    activeColor: "#8ec5ff",
-    ringColor: "rgba(128, 255, 206, 0.55)",
-    textColor: "#d8fff1",
-    isDragging: dragTarget === "origin"
-  });
-}
-
-function drawDestinationMarker(simDate, viewState) {
-  const destinationDescriptor = getCurrentDestinationDescriptor();
-  const destinationState = resolveDescriptorState(destinationDescriptor, simDate);
-
-  return drawDraggableMarker(destinationState.position, viewState, {
-    label: destinationDescriptor.mode === "custom" ? "Destination" : "Target",
-    color: "#ffd166",
-    activeColor: "#ffc98d",
-    ringColor: "rgba(255, 209, 102, 0.55)",
-    textColor: "#fff0c2",
-    isDragging: dragTarget === "destination"
-  });
-}
-
-function drawRouteOverlay(simDate, centerX, centerY, scale) {
-  if (!activeRoutePlan) {
-    return;
-  }
-
-  const currentOriginState = resolveDescriptorState(activeRoutePlan.originDescriptor, simDate);
-  const currentDestinationState = resolveDescriptorState(activeRoutePlan.destinationDescriptor, simDate);
-  const departurePoint = activeRoutePlan.departureState.position;
-  const arrivalPoint = activeRoutePlan.arrivalState.position;
-
-  const startX = centerX + departurePoint.x * scale;
-  const startY = centerY + departurePoint.y * scale;
-  const endX = centerX + arrivalPoint.x * scale;
-  const endY = centerY + arrivalPoint.y * scale;
-  const controlX = (startX + endX) / 2;
-  const controlY = (startY + endY) / 2 - Math.min(canvas.clientWidth, canvas.clientHeight) * 0.08;
-
-  ctx.save();
-  ctx.beginPath();
-  ctx.setLineDash([10, 8]);
-  ctx.strokeStyle = activeRoutePlan.feasible ? "rgba(120, 255, 206, 0.95)" : "rgba(255, 176, 120, 0.95)";
-  ctx.lineWidth = 2.5;
-  ctx.moveTo(startX, startY);
-  ctx.quadraticCurveTo(controlX, controlY, endX, endY);
-  ctx.stroke();
-  ctx.restore();
-
-  drawRouteMarker(currentOriginState.position, scale, centerX, centerY, "#80ffce", "You");
-  drawRouteMarker(currentDestinationState.position, scale, centerX, centerY, "#ffd166", "Target");
-  drawRouteMarker(departurePoint, scale, centerX, centerY, "#9cf6ff", "Departure");
-  drawRouteMarker(arrivalPoint, scale, centerX, centerY, "#ffc98d", "Destination");
-}
-
 function drawSolarSystem(simDate) {
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
@@ -1572,7 +1696,10 @@ function drawSolarSystem(simDate) {
 
   drawAsteroidBelt(simDate, viewState);
 
-  const glow = ctx.createRadialGradient(centerX, centerY, 8, centerX, centerY, 42);
+  const sunRadius = getSunDisplayRadius(simDate, scale);
+  const mercuryOrbitPx = spice.getBodyInfo("MERCURY").a * AU_KM * scale;
+  const sunGlowRadius = Math.min(sunRadius * 2.2, mercuryOrbitPx * 0.72);
+  const glow = ctx.createRadialGradient(centerX, centerY, Math.max(4, sunRadius * 0.45), centerX, centerY, sunGlowRadius);
   glow.addColorStop(0, "rgba(255, 220, 120, 1)");
   glow.addColorStop(0.3, "rgba(255, 190, 90, 0.8)");
   glow.addColorStop(0.65, "rgba(255, 160, 70, 0.2)");
@@ -1580,17 +1707,17 @@ function drawSolarSystem(simDate) {
 
   ctx.beginPath();
   ctx.fillStyle = glow;
-  ctx.arc(centerX, centerY, 40, 0, Math.PI * 2);
+  ctx.arc(centerX, centerY, sunGlowRadius, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.beginPath();
   ctx.fillStyle = "#ffce66";
-  ctx.arc(centerX, centerY, 16, 0, Math.PI * 2);
+  ctx.arc(centerX, centerY, sunRadius, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.fillStyle = "white";
-  ctx.font = "bold 14px Arial";
-  ctx.fillText("Sun", centerX - 14, centerY - 26);
+  ctx.font = `700 14px ${UI_FONT}`;
+  ctx.fillText("Sun", centerX - Math.max(14, sunRadius * 0.9), centerY - (sunRadius + 12));
 
   lastPlanetHitTargets = [];
   planetNames.forEach((name) => {
@@ -1605,15 +1732,17 @@ function drawSolarSystem(simDate) {
     ctx.fill();
 
     if (name === "SATURN") {
+      const ringRadiusX = radius * 1.95;
+      const ringRadiusY = Math.max(radius * 0.72, 6);
       ctx.beginPath();
       ctx.strokeStyle = "rgba(231, 210, 141, 0.9)";
-      ctx.lineWidth = 2;
-      ctx.ellipse(px, py, radius + 7, radius + 3, -0.4, 0, Math.PI * 2);
+      ctx.lineWidth = Math.max(1.8, radius * 0.16);
+      ctx.ellipse(px, py, ringRadiusX, ringRadiusY, -0.4, 0, Math.PI * 2);
       ctx.stroke();
     }
 
     ctx.fillStyle = "rgba(255,255,255,0.9)";
-    ctx.font = "12px Arial";
+    ctx.font = `12px ${UI_FONT}`;
     ctx.fillText(getPlanetDisplayName(name), px + 8, py - 8);
 
     lastPlanetHitTargets.push({
@@ -1652,7 +1781,7 @@ function updateUI(simDate) {
   });
 
   if (selectedPlanetName) {
-    showPlanetInfo(selectedPlanetName, simDate);
+    populatePlanetOverview(selectedPlanetName, simDate);
   }
 }
 
@@ -1803,6 +1932,11 @@ plannerBackdrop.addEventListener("click", () => {
 });
 
 window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && selectedPlanetName) {
+    hidePlanetInfo();
+    return;
+  }
+
   if (event.key === "Escape" && !plannerModal.classList.contains("hidden")) {
     setPlannerOpen(false);
   }
@@ -1823,7 +1957,7 @@ planRouteBtn.addEventListener("click", () => {
   });
 });
 
-window.addEventListener("resize", resizeCanvas);
+window.addEventListener("resize", () => scheduleCanvasResize(true));
 
 canvas.addEventListener("wheel", (event) => {
   event.preventDefault();
@@ -1842,8 +1976,8 @@ canvas.addEventListener("pointerdown", (event) => {
   const destinationState = resolveDescriptorState(getCurrentDestinationDescriptor(), getCurrentSimTime());
   const originMarker = canvasToScreen(originState.position, lastViewState);
   const destinationMarker = canvasToScreen(destinationState.position, lastViewState);
-  const originLabel = originMode.value === "custom" ? "Ship" : "Origin";
-  const destinationLabel = destinationMode.value === "custom" ? "Destination" : "Target";
+  const originLabel = getMarkerLabel("origin");
+  const destinationLabel = getMarkerLabel("destination");
   const originDistance = pointHitsMarker(pointer, originMarker, originLabel);
   const destinationDistance = pointHitsMarker(pointer, destinationMarker, destinationLabel);
 
@@ -1959,18 +2093,35 @@ canvas.addEventListener("pointerup", finishOriginDrag);
 canvas.addEventListener("pointercancel", finishOriginDrag);
 canvas.addEventListener("pointerleave", finishOriginDrag);
 closePlanetInfoBtn?.addEventListener("click", hidePlanetInfo);
+planetEndpointBtn?.addEventListener("click", () => {
+  if (!selectedPlanetName) {
+    return;
+  }
+
+  destinationMode.value = "body";
+  destinationBody.value = selectedPlanetName;
+  syncModeVisibility();
+  queueRoutePlan({
+    pendingSummary: `Updating route to ${getPlanetDisplayName(selectedPlanetName)}...`,
+    statusText: `Destination set to ${getPlanetDisplayName(selectedPlanetName)}.`
+  });
+  hidePlanetInfo();
+});
 
 function initializeApp() {
+  resetViewportScroll();
+  resetPlanetOverviewScroll();
   customTimeInput.value = formatDateForInput(new Date());
   if (speedInput) {
     speedInput.value = String(timeScale);
   }
   createAsteroids();
+  observeCanvasLayout();
   syncModeVisibility();
   setControlMenuOpen(false);
   setPlannerOpen(false);
   updateZoomDisplay();
-  resizeCanvas();
+  scheduleCanvasResize(true);
 
   queueRoutePlan({
     pendingSummary: "Calculating the initial route..."

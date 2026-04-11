@@ -57,23 +57,41 @@
       <section class="mission-main">
         <div class="canvas-wrap mission-canvas-wrap">
           <canvas id="solarCanvas" width="1000" height="1000"></canvas>
-          <div id="planetInfo" class="planet-info-overlay hidden" aria-live="polite">
-            <button id="closePlanetInfoBtn" class="planet-info-close" type="button" aria-label="Close target intelligence">Close</button>
-            <div class="planet-info-card">
-              <div class="planet-info-left">
-                <div id="planetBadge" class="planet-badge">?</div>
+          <section id="planetInfo" class="planet-overview hidden" aria-hidden="true" aria-live="polite">
+            <div class="planet-overview-surface"></div>
+            <div class="planet-overview-panel">
+              <div class="planet-overview-header">
+                <button id="closePlanetInfoBtn" class="planet-overview-close" type="button" aria-label="Close planet overview">Close</button>
+                <button id="planetEndpointBtn" class="planet-overview-endpoint" type="button">Set Endpoint</button>
               </div>
 
-              <div class="planet-info-right">
-                <p class="planet-info-kicker">Target Intelligence</p>
-                <h3 id="planetName">Selected Planet</h3>
-                <p><strong>Distance from Earth:</strong> <span id="planetDistance">Awaiting target lock</span></p>
-                <p><strong>Size:</strong> <span id="planetSize">Awaiting target lock</span></p>
-                <p><strong>Temperature:</strong> <span id="planetTemp">Awaiting target lock</span></p>
-                <p><strong>Elements / Composition:</strong> <span id="planetElements">Awaiting target lock</span></p>
+              <div class="planet-overview-copy">
+                <h2 id="planetName" class="planet-overview-title">Selected Planet</h2>
+              </div>
+
+              <div class="planet-overview-grid">
+                <div class="planet-overview-stat planet-overview-stat-size">
+                  <span class="planet-overview-label">Size</span>
+                  <span id="planetSize" class="planet-overview-value">Awaiting target lock</span>
+                </div>
+                <div class="planet-overview-stat planet-overview-stat-temp">
+                  <span class="planet-overview-label">Temperature</span>
+                  <span id="planetTemp" class="planet-overview-value">Awaiting target lock</span>
+                </div>
+                <div class="planet-overview-visual">
+                  <img id="planetOverviewImage" src="" alt="" />
+                </div>
+                <div class="planet-overview-stat planet-overview-stat-distance">
+                  <span class="planet-overview-label">Distance from Earth</span>
+                  <span id="planetDistance" class="planet-overview-value">Awaiting target lock</span>
+                </div>
+                <div class="planet-overview-stat planet-overview-stat-elements">
+                  <span class="planet-overview-label">Composition</span>
+                  <span id="planetElements" class="planet-overview-value">Awaiting target lock</span>
+                </div>
               </div>
             </div>
-          </div>
+          </section>
           <div class="canvas-hint">
             Scroll to zoom at the cursor. Drag empty space to pan. Drag the ship or destination markers to explore routes. Click a planet for target intelligence.
           </div>
