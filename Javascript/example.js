@@ -1,9 +1,4 @@
-/*
-  example-sim-main.js
-  --------------------------------------------
-  Example wiring for the new bridge modules.
-  Adjust kernel paths and body names for your project.
-*/
+
 
 const path = require("path");
 const { Vec3 } = require("./spice-integration");
