@@ -1,14 +1,4 @@
-/*
-  collision.js
-  --------------------------------------------
-  Collision and altitude checks for spacecraft
-  against SPICE-backed bodies.
 
-  Units:
-  - distance: km
-  - velocity: km/s
-  - time: s
-*/
 
 function getMeanRadiusKm(body) {
   if (!body || !Array.isArray(body.radii) || body.radii.length === 0) {
