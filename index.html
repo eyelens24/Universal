@@ -241,13 +241,22 @@
             </div>
           </div>
           <div class="ship-action-grid">
-            <div class="planner-priority-group">
-              <span class="planner-priority-label">Optimize for</span>
-              <label><input id="preferTimeInput" type="checkbox" checked /> Shortest travel time</label>
-              <label><input id="preferFuelInput" type="checkbox" checked /> Lowest fuel</label>
+            <div class="planner-priority-stack">
+              <div class="planner-priority-group">
+                <span class="planner-priority-label">Optimize for</span>
+                <label><input id="preferTimeInput" type="checkbox" checked /> Shortest travel time</label>
+                <label><input id="preferFuelInput" type="checkbox" checked /> Lowest fuel</label>
+              </div>
+              <div class="planner-speed-group">
+                <label for="plannerCruiseSpeedInput" class="planner-priority-label">Planned Cruise Speed</label>
+                <div class="planner-speed-row">
+                  <input id="plannerCruiseSpeedInput" type="number" min="10" step="0.1" value="20" />
+                  <span class="planner-speed-unit">km/s</span>
+                </div>
+                <p class="planner-speed-help">The planner searches for routes that can be flown at this cruise speed.</p>
+              </div>
             </div>
             <div class="planner-buttons">
-              <button id="swapRouteBtn" type="button">Swap Route</button>
               <button id="planRouteBtn" type="button">Plan Best Route</button>
             </div>
           </div>

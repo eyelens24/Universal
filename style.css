@@ -194,6 +194,11 @@ select {
   padding: 14px 28px;
 }
 
+.planner-priority-stack {
+  display: grid;
+  gap: 12px;
+}
+
 .planner-buttons {
   display: grid;
   gap: 10px;
@@ -238,6 +243,37 @@ select {
   letter-spacing: 0;
   color: #101827;
   font-weight: 700;
+}
+
+.planner-speed-group {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(16, 24, 38, 0.08);
+}
+
+.planner-speed-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.planner-speed-row input {
+  min-width: 0;
+}
+
+.planner-speed-unit {
+  font-size: 0.84rem;
+  color: #263142;
+  font-weight: 600;
+}
+
+.planner-speed-help {
+  margin: 0;
+  font-size: 0.76rem;
+  color: #3d4b60;
 }
 
 .custom-coords {
@@ -1217,7 +1253,7 @@ canvas {
 }
 
 .planet-overview-stat-size {
-  grid-column: 2 / span 4;
+  grid-column: 3 / span 4;
   grid-row: 2 / span 1;
   align-self: start;
 }
@@ -1228,12 +1264,15 @@ canvas {
   justify-self: start;
   text-align: left;
   align-self: start;
+  padding-left: 32px;
 }
 
 .planet-overview-stat-distance {
-  grid-column: 1 / span 5;
+  grid-column: 2 / span 5;
   grid-row: 4 / span 1;
   align-self: start;
+  padding-left: 14px;
+  transform: translateY(-28px);
 }
 
 .planet-overview-stat-elements {
@@ -1241,6 +1280,7 @@ canvas {
   grid-row: 2 / span 2;
   justify-self: start;
   align-self: start;
+  padding-left: 128px;
 }
 
 .planet-overview-visual {
@@ -1273,7 +1313,7 @@ canvas {
 }
 
 .planet-overview-visual img.is-saturn {
-  width: min(31vw, 470px);
+  width: min(35vw, 560px);
 }
 
 @keyframes planetOverviewZoomIn {

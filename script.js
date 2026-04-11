@@ -48,7 +48,7 @@ const fuelMassInput = document.getElementById("fuelMassInput");
 const ispInput = document.getElementById("ispInput");
 const preferTimeInput = document.getElementById("preferTimeInput");
 const preferFuelInput = document.getElementById("preferFuelInput");
-const swapRouteBtn = document.getElementById("swapRouteBtn");
+const plannerCruiseSpeedInput = document.getElementById("plannerCruiseSpeedInput");
 const planRouteBtn = document.getElementById("planRouteBtn");
 const routeSummary = document.getElementById("routeSummary");
 const routeStats = document.getElementById("routeStats");
@@ -603,7 +603,7 @@ function getViewState(simDate) {
 function setZoomAtPoint(nextZoomLevel, pointer) {
   const simDate = getCurrentSimTime();
   const currentView = getViewState(simDate);
-  const clampedZoom = clamp(nextZoomLevel, 0.35, 25);
+  const clampedZoom = clamp(nextZoomLevel, 0.9, 25);
 
   if (!pointer) {
     zoomLevel = clampedZoom;
@@ -623,7 +623,7 @@ function setZoomAtPoint(nextZoomLevel, pointer) {
 }
 
 function drawBackgroundStars(viewState) {
-  const zoomParallax = 0.9 + Math.log2(Math.max(zoomLevel, 0.35) + 1) * 0.22;
+  const zoomParallax = 0.9 + Math.log2(Math.max(zoomLevel, 0.9) + 1) * 0.22;
 
   stars.forEach((star) => {
     const x = viewState.width / 2 + (cameraOffsetX + star.x) * star.depth * zoomParallax;
@@ -1049,7 +1049,7 @@ function zoomIntoPlanetBeforeOverview(name) {
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
   const bodyState = getBodyState(name, simDate);
-  const targetZoom = clamp(Math.max(zoomLevel * 1.9, 7), 0.35, 25);
+  const targetZoom = clamp(Math.max(zoomLevel * 1.9, 7), 0.9, 25);
   const targetScale = getBaseScale(simDate) * targetZoom;
   const targetOffsetX = -bodyState.position.x * targetScale;
   const targetOffsetY = -bodyState.position.y * targetScale;
@@ -1725,6 +1725,37 @@ function summarizePreferenceText(preferences) {
   return active.join(", ");
 }
 
+function getTotalJourneyDays(candidate) {
+  return (candidate?.delayDays || 0) + (candidate?.travelDays || 0);
+}
+
+function getPlannedCruiseSpeedKmS() {
+  if (!plannerCruiseSpeedInput) {
+    return 20;
+  }
+
+  const rawValue = plannerCruiseSpeedInput.value.trim();
+  if (!rawValue) {
+    return 20;
+  }
+
+  const plannedCruiseSpeedKmS = Number(rawValue);
+  if (!Number.isFinite(plannedCruiseSpeedKmS) || plannedCruiseSpeedKmS < 10) {
+    throw new Error("Please enter a planned cruise speed of at least 10 km/s.");
+  }
+
+  return plannedCruiseSpeedKmS;
+}
+
+function filterCandidatesByCruiseSpeed(candidates, plannedCruiseSpeedKmS) {
+  return candidates.filter((candidate) => candidate.requiredCruiseSpeedKmS <= plannedCruiseSpeedKmS);
+}
+
+function requiredCruiseSpeedKmS(originPosition, originVelocity, targetPosition, travelSeconds) {
+  const lineVelocity = targetPosition.sub(originPosition).scale(1 / Math.max(travelSeconds, 1));
+  return lineVelocity.sub(originVelocity).norm();
+}
+
 function estimateBodyTransferCandidate(originDescriptor, destinationDescriptor, departureDate, ship) {
   const destinationInfo = spice.getBodyInfo(destinationDescriptor.bodyName);
   const destinationMeanMotion = (Math.PI * 2) / (destinationInfo.orbitalPeriodDays * DAY_SECONDS);
@@ -1789,6 +1820,12 @@ function estimateBodyTransferCandidate(originDescriptor, destinationDescriptor, 
     arrivalState.position,
     transferSeconds / DAY_SECONDS
   );
+  const requiredCruiseSpeedKmSValue = requiredCruiseSpeedKmS(
+    departureState.position,
+    departureState.velocity,
+    arrivalState.position,
+    transferSeconds
+  );
 
   return {
     delayDays: 0,
@@ -1798,6 +1835,7 @@ function estimateBodyTransferCandidate(originDescriptor, destinationDescriptor, 
     departureState,
     arrivalState,
     transitVelocity: departureTransferVelocity,
+    requiredCruiseSpeedKmS: requiredCruiseSpeedKmSValue,
     departureDeltaV,
     arrivalDeltaV,
     totalDeltaV,
@@ -1903,6 +1941,7 @@ function estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate
   }
 
   const candidates = [];
+  const plannedCruiseSpeedKmS = getPlannedCruiseSpeedKmS();
 
   for (const delayDays of departureDelayDays) {
     const departureDate = new Date(simDate.getTime() + delayDays * DAY_MS);
@@ -1937,6 +1976,12 @@ function estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate
         arrivalState.position,
         travelDays
       );
+      const requiredCruiseSpeedKmSValue = requiredCruiseSpeedKmS(
+        departureState.position,
+        departureState.velocity,
+        arrivalState.position,
+        transferSeconds
+      );
 
       candidates.push({
         delayDays,
@@ -1946,6 +1991,7 @@ function estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate
         departureState,
         arrivalState,
         transitVelocity: transferSolution.departureVelocity,
+        requiredCruiseSpeedKmS: requiredCruiseSpeedKmSValue,
         departureDeltaV,
         arrivalDeltaV,
         totalDeltaV,
@@ -1973,8 +2019,12 @@ function estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate
   }
 
   const preferences = ensureAtLeastOnePreference(getOptimizationPreferences());
-  const validCandidates = candidates
+  const validCandidates = filterCandidatesByCruiseSpeed(candidates, plannedCruiseSpeedKmS)
     .filter((candidate) => candidate.arrivalPositionErrorKm < 3500000);
+
+  if (!validCandidates.length) {
+    throw new Error(`No transfer options fit the planned cruise speed of ${formatNumber(plannedCruiseSpeedKmS, 1)} km/s. Increase the speed to open more routes.`);
+  }
 
   const metrics = validCandidates.reduce((acc, candidate) => {
     acc.maxTravelDays = Math.max(acc.maxTravelDays, candidate.travelDays);
@@ -2023,7 +2073,12 @@ function estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate
     a.peakRadiation - b.peakRadiation ||
     a.travelDays - b.travelDays
   );
-  const fastestCandidates = [...routePool].sort((a, b) =>
+  const fastestTransitCandidates = [...routePool].sort((a, b) =>
+    a.travelDays - b.travelDays ||
+    a.arrivalPositionErrorKm - b.arrivalPositionErrorKm
+  );
+  const fastestJourneyCandidates = [...routePool].sort((a, b) =>
+    getTotalJourneyDays(a) - getTotalJourneyDays(b) ||
     a.travelDays - b.travelDays ||
     a.arrivalPositionErrorKm - b.arrivalPositionErrorKm
   );
@@ -2031,7 +2086,8 @@ function estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate
   const best = feasibleCandidates[0] || fallbackCandidates[0] || null;
   const minimumFuelPlan = minimumFuelCandidates[0] || fallbackCandidates[0] || null;
   const lowestRadiationPlan = lowestRadiationCandidates[0] || fallbackCandidates[0] || null;
-  const fastestPlan = fastestCandidates[0] || fallbackCandidates[0] || null;
+  const fastestTransitPlan = fastestTransitCandidates[0] || fallbackCandidates[0] || null;
+  const fastestJourneyPlan = fastestJourneyCandidates[0] || fallbackCandidates[0] || null;
   if (!best) {
     throw new Error("No route candidates could be generated.");
   }
@@ -2045,19 +2101,24 @@ function estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate
     originDescriptor,
     destinationDescriptor,
     ship,
+    plannedCruiseSpeedKmS,
+    cruiseSpeedKmS: plannedCruiseSpeedKmS,
     feasible: best.feasible,
     candidateCount: candidates.length,
     validCandidateCount: validCandidates.length,
     direction,
     preferences,
+    totalJourneyDays: getTotalJourneyDays(best),
     minimumFuelRequiredKg: minimumFuelPlan ? minimumFuelPlan.fuelRequiredKg : best.fuelRequiredKg,
     minimumFuelDepartureDate: minimumFuelPlan ? minimumFuelPlan.departureDate : best.departureDate,
     minimumFuelTravelDays: minimumFuelPlan ? minimumFuelPlan.travelDays : best.travelDays,
     lowestRadiationScore: lowestRadiationPlan ? lowestRadiationPlan.radiationScore : best.radiationScore,
     lowestRadiationDepartureDate: lowestRadiationPlan ? lowestRadiationPlan.departureDate : best.departureDate,
     lowestRadiationTravelDays: lowestRadiationPlan ? lowestRadiationPlan.travelDays : best.travelDays,
-    fastestDepartureDate: fastestPlan ? fastestPlan.departureDate : best.departureDate,
-    fastestTravelDays: fastestPlan ? fastestPlan.travelDays : best.travelDays,
+    shortestTransitDepartureDate: fastestTransitPlan ? fastestTransitPlan.departureDate : best.departureDate,
+    shortestTransitTravelDays: fastestTransitPlan ? fastestTransitPlan.travelDays : best.travelDays,
+    fastestJourneyDepartureDate: fastestJourneyPlan ? fastestJourneyPlan.departureDate : best.departureDate,
+    fastestJourneyDays: fastestJourneyPlan ? getTotalJourneyDays(fastestJourneyPlan) : getTotalJourneyDays(best),
     ...best
   };
 }
@@ -2072,98 +2133,7 @@ function estimateRoute(originDescriptor, destinationDescriptor, simDate, ship) {
     throw new Error("Origin and destination cannot be the same body.");
   }
 
-  if (originDescriptor.mode !== "body" || destinationDescriptor.mode !== "body") {
-    return estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate, ship);
-  }
-
-  const candidates = [];
-  const preferences = ensureAtLeastOnePreference(getOptimizationPreferences());
-  for (let delayDays = 0; delayDays <= 780; delayDays += 5) {
-    const departureDate = new Date(simDate.getTime() + delayDays * DAY_MS);
-    const candidate = estimateBodyTransferCandidate(
-      originDescriptor,
-      destinationDescriptor,
-      departureDate,
-      ship
-    );
-    candidate.delayDays = delayDays;
-    candidates.push(candidate);
-  }
-
-  const validCandidates = candidates
-    .filter((candidate) => candidate.arrivalPositionErrorKm < 25000000);
-
-  const metrics = validCandidates.reduce((acc, candidate) => {
-    acc.maxTravelDays = Math.max(acc.maxTravelDays, candidate.travelDays);
-    acc.maxFuelRequiredKg = Math.max(acc.maxFuelRequiredKg, candidate.fuelRequiredKg);
-    acc.maxRadiationScore = Math.max(acc.maxRadiationScore, candidate.radiationScore);
-    return acc;
-  }, {
-    maxTravelDays: 1,
-    maxFuelRequiredKg: 1,
-    maxRadiationScore: 1
-  });
-
-  const crewSafeCandidates = validCandidates
-    .filter((candidate) => candidate.crewSafe);
-  const routePool = crewSafeCandidates.length ? crewSafeCandidates : validCandidates;
-
-  const feasibleCandidates = routePool
-    .filter((candidate) => candidate.feasible)
-    .sort((a, b) =>
-      getRouteScore(a, metrics, preferences) - getRouteScore(b, metrics, preferences) ||
-      comparePlanCandidates(a, b)
-    );
-
-  const minimumFuelCandidates = [...routePool].sort((a, b) =>
-    a.fuelRequiredKg - b.fuelRequiredKg ||
-    a.phaseErrorRad - b.phaseErrorRad ||
-    comparePlanCandidates(a, b)
-  );
-
-  const fallbackCandidates = [...(routePool.length ? routePool : candidates)].sort(comparePlanCandidates);
-  const lowestRadiationCandidates = [...routePool].sort((a, b) =>
-    a.radiationScore - b.radiationScore ||
-    a.peakRadiation - b.peakRadiation ||
-    comparePlanCandidates(a, b)
-  );
-  const fastestCandidates = [...routePool].sort((a, b) =>
-    a.travelDays - b.travelDays ||
-    comparePlanCandidates(a, b)
-  );
-  const best = feasibleCandidates[0] || fallbackCandidates[0] || null;
-  const minimumFuelPlan = minimumFuelCandidates[0] || fallbackCandidates[0] || null;
-  const lowestRadiationPlan = lowestRadiationCandidates[0] || fallbackCandidates[0] || null;
-  const fastestPlan = fastestCandidates[0] || fallbackCandidates[0] || null;
-
-  if (!best) {
-    throw new Error("No route candidates could be generated.");
-  }
-
-  const direction = best.departureDeltaV > 0
-    ? departureBurnLabel(best.departureState.velocity, best.transitVelocity)
-    : "Coast";
-
-  return {
-    createdAt: simDate,
-    originDescriptor,
-    destinationDescriptor,
-    ship,
-    feasible: best.feasible,
-    candidateCount: candidates.length,
-    validCandidateCount: validCandidates.length,
-    direction,
-    preferences,
-    minimumFuelRequiredKg: minimumFuelPlan ? minimumFuelPlan.fuelRequiredKg : best.fuelRequiredKg,
-    minimumFuelDepartureDate: minimumFuelPlan ? minimumFuelPlan.departureDate : best.departureDate,
-    minimumFuelTravelDays: minimumFuelPlan ? minimumFuelPlan.travelDays : best.travelDays,
-    lowestRadiationScore: lowestRadiationPlan ? lowestRadiationPlan.radiationScore : best.radiationScore,
-    lowestRadiationDepartureDate: lowestRadiationPlan ? lowestRadiationPlan.departureDate : best.departureDate,
-    lowestRadiationTravelDays: lowestRadiationPlan ? lowestRadiationPlan.travelDays : best.travelDays,
-    fastestDepartureDate: fastestPlan ? fastestPlan.departureDate : best.departureDate,
-    fastestTravelDays: fastestPlan ? fastestPlan.travelDays : best.travelDays,
-    ...best
-  };
+  return estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate, ship);
 }
 
 function departureBurnLabel(originVelocity, transitVelocity) {
@@ -2269,10 +2239,15 @@ function renderRouteStats(plan) {
         { label: "Selected Priorities", value: summarizePreferenceText(plan.preferences) || "time, fuel, radiation" },
         { label: "Minimum Fuel To Make Trip", value: formatFuel(plan.minimumFuelRequiredKg) },
         { label: "Lowest Fuel Leave Time", value: formatShortDate(plan.minimumFuelDepartureDate) },
-        { label: "Shortest-Time Departure", value: formatShortDate(plan.fastestDepartureDate) },
-        { label: "Shortest Travel Time", value: formatDays(plan.fastestTravelDays) },
+        { label: "Total Journey Time", value: formatDays(plan.totalJourneyDays) },
+        { label: "Fastest Overall Departure", value: formatShortDate(plan.fastestJourneyDepartureDate) },
+        { label: "Fastest Overall Journey", value: formatDays(plan.fastestJourneyDays) },
+        { label: "Shortest Transit Departure", value: formatShortDate(plan.shortestTransitDepartureDate) },
+        { label: "Shortest Transit Time", value: formatDays(plan.shortestTransitTravelDays) },
         { label: "Lowest Radiation Leave Time", value: formatShortDate(plan.lowestRadiationDepartureDate) },
         { label: "Travel Time", value: formatDays(plan.travelDays) },
+        { label: "Planned Cruise Speed", value: `${formatNumber(plan.plannedCruiseSpeedKmS || plan.cruiseSpeedKmS, 2)} km/s` },
+        { label: "Required Cruise Speed", value: `${formatNumber(plan.requiredCruiseSpeedKmS || plan.cruiseSpeedKmS, 2)} km/s` },
         { label: "Departure Burn", value: formatDeltaV(plan.departureDeltaV) },
         { label: "Arrival Match", value: formatDeltaV(plan.arrivalDeltaV) },
         { label: "Total Delta-V", value: formatDeltaV(plan.totalDeltaV) },
@@ -2293,10 +2268,15 @@ function renderRouteStats(plan) {
         "Selected Priorities",
         "Minimum Fuel To Make Trip",
         "Lowest Fuel Leave Time",
-        "Shortest-Time Departure",
-        "Shortest Travel Time",
+        "Total Journey Time",
+        "Fastest Overall Departure",
+        "Fastest Overall Journey",
+        "Shortest Transit Departure",
+        "Shortest Transit Time",
         "Lowest Radiation Leave Time",
         "Travel Time",
+        "Planned Cruise Speed",
+        "Required Cruise Speed",
         "Departure Burn",
         "Arrival Match",
         "Total Delta-V",
@@ -2385,12 +2365,13 @@ function planActiveRoute() {
     `${feasibilityText}. Best time to leave is ${formatShortDate(plan.departureDate)} ` +
     `(${plan.delayDays === 0 ? "leave now" : `in ${formatNumber(plan.delayDays, 1)} days`}), ` +
     `optimized for ${preferenceSummary}. ` +
-    `travel for ${formatNumber(plan.travelDays, 1)} days, and ${plan.direction.toLowerCase()}. ` +
+    `travel for ${formatNumber(plan.travelDays, 1)} days with a planned cruise speed of ${formatNumber(plan.plannedCruiseSpeedKmS || plan.cruiseSpeedKmS, 2)} km/s, for a total journey time of ${formatDays(plan.totalJourneyDays)}, and ${plan.direction.toLowerCase()}. ` +
     `Estimated total delta-v is ${formatNumber(plan.totalDeltaV, 2)} km/s ` +
     `with ${formatNumber(plan.fuelRequiredKg, 1)} kg of fuel required for the selected route. ` +
     `Estimated crew radiation dose is ${formatDose(plan.radiationDoseMsv)} against a ${formatDose(plan.missionDoseLimitMsv)} mission limit (${plan.crewRadiationRisk.toLowerCase()}). ` +
     `Minimum fuel to make the trip at all is ${formatNumber(plan.minimumFuelRequiredKg, 1)} kg. ` +
-    `For shortest travel time, depart ${formatShortDate(plan.fastestDepartureDate)} and travel for ${formatDays(plan.fastestTravelDays)}. ` +
+    `Fastest overall journey is ${formatDays(plan.fastestJourneyDays)} if you depart ${formatShortDate(plan.fastestJourneyDepartureDate)}. ` +
+    `Shortest time in transit is ${formatDays(plan.shortestTransitTravelDays)} if you depart ${formatShortDate(plan.shortestTransitDepartureDate)}. ` +
     `Lowest-radiation departure is ${formatShortDate(plan.lowestRadiationDepartureDate)}. ` +
     `Sun gravity is included in the transfer estimate. ` +
     `${getAsteroidRiskStatus(plan.asteroidRisk).alert}`;
@@ -2781,11 +2762,6 @@ window.addEventListener("keydown", (event) => {
 originMode.addEventListener("change", syncModeVisibility);
 destinationMode.addEventListener("change", syncModeVisibility);
 
-swapRouteBtn.addEventListener("click", () => {
-  swapRouteSelections();
-  setStatus("Origin and destination swapped.");
-});
-
 planRouteBtn.addEventListener("click", () => {
   queueRoutePlan({
     pendingSummary: "Calculating the fastest gravity-assisted route...",
@@ -2803,6 +2779,7 @@ planRouteBtn.addEventListener("click", () => {
   ispInput,
   preferTimeInput,
   preferFuelInput,
+  plannerCruiseSpeedInput,
   originCustomX,
   originCustomY,
   originCustomZ,
@@ -2813,6 +2790,10 @@ planRouteBtn.addEventListener("click", () => {
   control?.addEventListener("change", () => {
     scheduleRoutePlanUpdate("Route guidance refreshed.");
   });
+});
+
+plannerCruiseSpeedInput?.addEventListener("input", () => {
+  scheduleRoutePlanUpdate("Cruise speed limit updated.");
 });
 
 window.addEventListener("resize", () => scheduleCanvasResize(true));
