@@ -69,6 +69,6 @@ There are still lots of things that can be improved upon from this app. One of w
   [Official Site](https://naif.jpl.nasa.gov/naif/toolkit.html)
 
 - **Patched Conics Approximation** (for trajectory modeling):  
-  [Wikipedia](https://en.wikipedia.org/wiki/Patched_conics_approximation)
+  [Wikipedia](https://en.wikipedia.org/wiki/Patched_conic_approximation)
 
 
