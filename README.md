@@ -1,5 +1,5 @@
 # Universal
-[https://eyelens24.github.io/Universal/](Universal Navigation Suite)
+[Universal Navigation Suite] ([Universal Navigation Suite](https://eyelens24.github.io/Universal/))
 
 NASA uses a program called PNT (Position, Navigation and Timing) where its purpose is to:
 1. Precisely locate a spacecraft in space
