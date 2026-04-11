@@ -19,6 +19,16 @@
         </div>
       </div>
 
+      <div class="sim-time-chip">
+        <span class="sim-time-label">Simulation Time</span>
+        <span id="simTimeDisplay" class="sim-time-value">Loading...</span>
+      </div>
+
+      <div class="nav-control-card planner-preview">
+        <span class="card-label">Trajectory Tools</span>
+        <button id="openPlannerBtn" type="button">Plan Route</button>
+      </div>
+
       <div class="controls mission-controls" id="missionControls" aria-hidden="true">
         <div class="nav-control-card nav-time-card">
           <div class="control-field speed-field">
@@ -30,14 +40,6 @@
             <input type="datetime-local" id="customTime" step="1" />
           </div>
           <button id="applyTimeBtn">Apply</button>
-        </div>
-        <div class="sim-time-chip">
-          <span class="sim-time-label">Simulation Time</span>
-          <span id="simTimeDisplay" class="sim-time-value">Loading...</span>
-        </div>
-        <div class="nav-control-card planner-preview">
-          <span class="card-label">Trajectory Tools</span>
-          <button id="openPlannerBtn" type="button">Plan Route</button>
         </div>
         <div class="zoom-controls">
           <span class="zoom-label">Zoom</span>
@@ -57,38 +59,30 @@
       <section class="mission-main">
         <div class="canvas-wrap mission-canvas-wrap">
           <canvas id="solarCanvas" width="1000" height="1000"></canvas>
-          <aside class="mission-telemetry" aria-live="polite">
-            <div class="mission-telemetry-header">
-              <span class="mission-telemetry-eyebrow">Live Telemetry</span>
-              <strong id="missionStatusValue" class="mission-status-value">Monitoring route safety</strong>
+          <aside class="asteroid-monitor" aria-live="polite">
+            <div class="asteroid-monitor-header">
+              <span class="asteroid-monitor-eyebrow">Asteroid Watch</span>
+              <strong id="asteroidRiskValue" class="asteroid-status-value">Tracking moving objects</strong>
             </div>
-            <div class="mission-telemetry-grid">
-              <div class="mission-telemetry-stat">
-                <span class="mission-telemetry-label">Closest Body</span>
-                <span id="telemetryClosestBody" class="mission-telemetry-value">Awaiting target</span>
+            <div class="asteroid-monitor-grid">
+              <div class="asteroid-monitor-stat">
+                <span class="asteroid-monitor-label">Tracked</span>
+                <span id="asteroidTrackedValue" class="asteroid-monitor-value">Awaiting route</span>
               </div>
-              <div class="mission-telemetry-stat">
-                <span class="mission-telemetry-label">Altitude</span>
-                <span id="telemetryAltitude" class="mission-telemetry-value">Awaiting target</span>
+              <div class="asteroid-monitor-stat">
+                <span class="asteroid-monitor-label">Closest Object</span>
+                <span id="asteroidClosestValue" class="asteroid-monitor-value">Awaiting route</span>
               </div>
-              <div class="mission-telemetry-stat">
-                <span class="mission-telemetry-label">Relative Speed</span>
-                <span id="telemetryRelativeSpeed" class="mission-telemetry-value">Awaiting target</span>
+              <div class="asteroid-monitor-stat">
+                <span class="asteroid-monitor-label">Closest Approach</span>
+                <span id="asteroidApproachValue" class="asteroid-monitor-value">Awaiting route</span>
               </div>
-              <div class="mission-telemetry-stat">
-                <span class="mission-telemetry-label">Dominant Gravity</span>
-                <span id="telemetryDominantGravity" class="mission-telemetry-value">Awaiting target</span>
-              </div>
-              <div class="mission-telemetry-stat">
-                <span class="mission-telemetry-label">Solar Distance</span>
-                <span id="telemetrySolarDistance" class="mission-telemetry-value">Awaiting target</span>
-              </div>
-              <div class="mission-telemetry-stat">
-                <span class="mission-telemetry-label">Ship Speed</span>
-                <span id="telemetryShipSpeed" class="mission-telemetry-value">Awaiting target</span>
+              <div class="asteroid-monitor-stat">
+                <span class="asteroid-monitor-label">Time</span>
+                <span id="asteroidTimeValue" class="asteroid-monitor-value">Awaiting route</span>
               </div>
             </div>
-            <p id="missionAlertText" class="mission-alert-text">Telemetry will update once the mission state is resolved.</p>
+            <p id="asteroidAlertText" class="asteroid-alert-text">Plan a route to scan moving asteroid paths for collision risk.</p>
           </aside>
           <section id="planetInfo" class="planet-overview hidden" aria-hidden="true" aria-live="polite">
             <div class="planet-overview-surface"></div>
@@ -173,12 +167,18 @@
           </div>
 
           <div id="originCustomGroup" class="custom-coords hidden">
-            <label for="originCustomX">X (AU)</label>
-            <input id="originCustomX" type="number" step="0.001" value="1" />
-            <label for="originCustomY">Y (AU)</label>
-            <input id="originCustomY" type="number" step="0.001" value="0" />
-            <label for="originCustomZ">Z (AU)</label>
-            <input id="originCustomZ" type="number" step="0.001" value="0" />
+            <div class="coord-field">
+              <label for="originCustomX">X (AU)</label>
+              <input id="originCustomX" type="number" step="0.001" value="1" />
+            </div>
+            <div class="coord-field">
+              <label for="originCustomY">Y (AU)</label>
+              <input id="originCustomY" type="number" step="0.001" value="0" />
+            </div>
+            <div class="coord-field">
+              <label for="originCustomZ">Z (AU)</label>
+              <input id="originCustomZ" type="number" step="0.001" value="0" />
+            </div>
           </div>
         </div>
 
@@ -209,12 +209,18 @@
           </div>
 
           <div id="destinationCustomGroup" class="custom-coords hidden">
-            <label for="destinationCustomX">X (AU)</label>
-            <input id="destinationCustomX" type="number" step="0.001" value="1.524" />
-            <label for="destinationCustomY">Y (AU)</label>
-            <input id="destinationCustomY" type="number" step="0.001" value="0" />
-            <label for="destinationCustomZ">Z (AU)</label>
-            <input id="destinationCustomZ" type="number" step="0.001" value="0" />
+            <div class="coord-field">
+              <label for="destinationCustomX">X (AU)</label>
+              <input id="destinationCustomX" type="number" step="0.001" value="1.524" />
+            </div>
+            <div class="coord-field">
+              <label for="destinationCustomY">Y (AU)</label>
+              <input id="destinationCustomY" type="number" step="0.001" value="0" />
+            </div>
+            <div class="coord-field">
+              <label for="destinationCustomZ">Z (AU)</label>
+              <input id="destinationCustomZ" type="number" step="0.001" value="0" />
+            </div>
           </div>
         </div>
 
