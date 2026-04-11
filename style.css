@@ -19,7 +19,7 @@
 body {
   min-height: 100vh;
   font-family: "Gunken", Arial, Helvetica, sans-serif;
-  letter-spacing: 0.035em;
+  letter-spacing: 0;
   background:
     radial-gradient(circle at center, #101a2c 0%, #090d16 45%, #04060b 100%);
   color: white;
@@ -44,7 +44,7 @@ h1 {
   text-align: center;
   margin-bottom: 16px;
   font-size: 2rem;
-  letter-spacing: 1px;
+  letter-spacing: 0;
   font-family: "Legend", "Gunken", Arial, sans-serif;
 }
 
@@ -62,7 +62,7 @@ input[type="datetime-local"],
 input[type="number"],
 select {
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 10px 14px;
   font-size: 0.95rem;
   font-family: inherit;
@@ -145,7 +145,7 @@ select {
 .route-output h3 {
   color: #f5f7fb;
   font-size: 1rem;
-  letter-spacing: 0.03em;
+  letter-spacing: 0;
 }
 
 .planner-field-grid {
@@ -235,16 +235,27 @@ select {
 .planner-priority-label {
   font-size: 0.76rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   color: #101827;
   font-weight: 700;
 }
 
 .custom-coords {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(3, minmax(128px, 1fr));
+  gap: 12px;
   align-items: end;
+}
+
+.coord-field {
+  min-width: 0;
+}
+
+.coord-field label {
+  display: block;
+  margin-bottom: 6px;
+  color: #121a29;
+  font-size: 0.86rem;
 }
 
 .planner-card .custom-coords {
@@ -277,13 +288,13 @@ select {
 
 .modal-dialog {
   position: relative;
-  width: min(1230px, 100%);
+  width: min(1360px, 100%);
   max-height: calc(100vh - 10vh);
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
   display: grid;
-  grid-template-columns: minmax(410px, 0.92fr) minmax(520px, 1.18fr);
+  grid-template-columns: minmax(470px, 0.95fr) minmax(560px, 1.15fr);
   grid-template-rows: auto auto;
   align-items: stretch;
   gap: 24px 34px;
@@ -325,14 +336,14 @@ select {
   color: #f5f7fb;
   font-size: clamp(2rem, 4vw, 3.1rem);
   line-height: 0.95;
-  letter-spacing: 0.1em;
+  letter-spacing: 0;
   text-transform: uppercase;
 }
 
 .modal-header p {
   color: rgba(255, 255, 255, 0.88);
   font-size: 1.08rem;
-  letter-spacing: 0.02em;
+  letter-spacing: 0;
 }
 
 .modal-close {
@@ -373,7 +384,7 @@ select {
 .route-timeline-label {
   font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0;
   color: #9fc8ff;
 }
 
@@ -418,7 +429,7 @@ select {
   font-size: 0.68rem;
   color: #5b6472;
   text-transform: uppercase;
-  letter-spacing: 0.11em;
+  letter-spacing: 0;
   margin-bottom: 8px;
 }
 
@@ -537,8 +548,9 @@ canvas {
   height: 100vh;
   min-height: 100vh;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  padding: 34px 4vw 0;
+  grid-template-rows: minmax(0, 1fr);
+  position: relative;
+  padding: 0 4vw;
   margin: 0;
   border-radius: 0;
   background: transparent;
@@ -549,7 +561,7 @@ canvas {
 
 .mission-control-page .eyebrow {
   text-transform: uppercase;
-  letter-spacing: 0.18em;
+  letter-spacing: 0;
   font-size: 0.72rem;
   color: #8ec5ff;
   margin-bottom: 8px;
@@ -560,7 +572,7 @@ canvas {
   margin-bottom: 0;
   font-size: clamp(1.45rem, 2.3vw, 2.05rem);
   line-height: 0.95;
-  letter-spacing: 0.32em;
+  letter-spacing: 0;
   font-weight: 700;
   font-family: "Legend", "Gunken", Arial, sans-serif;
 }
@@ -569,7 +581,7 @@ canvas {
   margin-top: 10px;
   color: rgba(255, 255, 255, 0.9);
   font-size: clamp(1rem, 1.5vw, 1.25rem);
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
 }
 
 .mission-brand-row {
@@ -583,13 +595,17 @@ canvas {
   --nav-button-width: 182px;
   --nav-button-height: 40px;
   --zoom-button-size: 40px;
-  position: relative;
+  position: absolute;
+  top: 34px;
+  left: 4vw;
+  right: 4vw;
+  z-index: 8;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   flex-wrap: wrap;
   gap: 18px;
-  margin-bottom: 16px;
+  margin-bottom: 0;
   background: transparent;
   border: 0;
   box-shadow: none;
@@ -612,8 +628,9 @@ canvas {
   padding: 0 14px;
   background: #ffd400;
   color: #030711;
+  border: 0;
   font-size: 0.8rem;
-  letter-spacing: 0.045em;
+  letter-spacing: 0;
   white-space: nowrap;
 }
 
@@ -678,7 +695,7 @@ canvas {
 
 .mission-control-page .mission-controls {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
   align-items: stretch;
   justify-content: stretch;
   position: absolute;
@@ -719,6 +736,48 @@ canvas {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
+.mission-topbar > .sim-time-chip,
+.mission-topbar > .planner-preview {
+  min-height: 84px;
+  width: min(260px, 22vw);
+  flex: 0 1 260px;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.mission-topbar > .planner-preview button {
+  background: #ffd400;
+  color: #030711;
+  border: 0;
+}
+
+.mission-topbar > .planner-preview {
+  position: fixed;
+  top: calc(clamp(210px, 27vh, 300px) + 330px);
+  right: 24px;
+  z-index: 6;
+  width: min(360px, calc(100vw - 48px));
+  flex: none;
+}
+
+.mission-topbar > .sim-time-chip {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  flex: none;
+}
+
+.mission-control-page.planet-overview-active .mission-topbar > .sim-time-chip {
+  display: none;
+}
+
+.mission-control-page.planet-overview-active .mission-topbar {
+  display: none;
+}
+
 .nav-time-card {
   display: grid;
   grid-template-columns: minmax(64px, 0.5fr) minmax(0, 1.5fr);
@@ -739,7 +798,7 @@ canvas {
   color: rgba(255, 255, 255, 0.9);
   font-size: 0.82rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
 }
 
 .mission-control-page input[type="number"],
@@ -816,7 +875,7 @@ canvas {
   margin: 0;
   font-size: 0.74rem;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0;
   color: rgba(182, 215, 255, 0.75);
   white-space: nowrap;
 }
@@ -843,7 +902,7 @@ canvas {
   font-size: 0.82rem;
   font-weight: 700;
   text-transform: none;
-  letter-spacing: 0.06em;
+  letter-spacing: 0;
   color: rgba(255, 255, 255, 0.92);
 }
 
@@ -866,7 +925,7 @@ canvas {
   color: rgba(255, 255, 255, 0.56);
   font-size: 0.84rem;
   font-weight: 400;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   white-space: nowrap;
 }
 
@@ -876,7 +935,7 @@ canvas {
   font-size: 0.82rem;
   color: rgba(255, 255, 255, 0.88);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
   text-align: center;
 }
 
@@ -885,7 +944,7 @@ canvas {
   text-align: center;
   color: #eef6ff;
   font-size: 0.95rem;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
 }
 
 .zoom-controls button {
@@ -897,9 +956,12 @@ canvas {
 
 .mission-layout {
   display: flex;
+  grid-row: 1;
   min-height: 0;
   height: 100%;
   margin: 0 -4vw;
+  position: relative;
+  z-index: 0;
 }
 
 .mission-main {
@@ -923,70 +985,70 @@ canvas {
   margin-top: 0;
 }
 
-.mission-telemetry {
+.asteroid-monitor {
   position: absolute;
-  top: 24px;
+  top: clamp(210px, 27vh, 300px);
   right: 24px;
   z-index: 2;
   width: min(360px, calc(100vw - 48px));
   display: grid;
   gap: 14px;
   padding: 18px 18px 16px;
-  border-radius: 16px;
+  border-radius: 8px;
   background: rgba(8, 18, 38, 0.82);
   border: 1px solid rgba(157, 215, 255, 0.18);
   backdrop-filter: blur(14px);
   box-shadow: 0 22px 46px rgba(0, 0, 0, 0.28);
 }
 
-.mission-telemetry-header {
+.asteroid-monitor-header {
   display: grid;
   gap: 6px;
 }
 
-.mission-telemetry-eyebrow {
+.asteroid-monitor-eyebrow {
   color: #8ec5ff;
   font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.16em;
+  letter-spacing: 0;
 }
 
-.mission-status-value {
+.asteroid-status-value {
   color: #f5f8ff;
   font-size: 1.05rem;
   line-height: 1.3;
 }
 
-.mission-telemetry-grid {
+.asteroid-monitor-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
-.mission-telemetry-stat {
+.asteroid-monitor-stat {
   display: grid;
   gap: 4px;
   min-width: 0;
   padding: 12px 12px 10px;
-  border-radius: 12px;
+  border-radius: 8px;
   background: rgba(174, 181, 192, 0.12);
 }
 
-.mission-telemetry-label {
+.asteroid-monitor-label {
   color: rgba(159, 200, 255, 0.88);
   font-size: 0.68rem;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0;
 }
 
-.mission-telemetry-value {
+.asteroid-monitor-value {
   color: #f4f8ff;
   font-size: 0.92rem;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
 
-.mission-alert-text {
+.asteroid-alert-text {
   color: rgba(223, 235, 255, 0.82);
   font-size: 0.84rem;
   line-height: 1.5;
@@ -1020,7 +1082,7 @@ canvas {
   margin-top: 0;
   color: rgba(213, 233, 255, 0.72);
   font-size: 0.92rem;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
   pointer-events: none;
 }
 
@@ -1067,8 +1129,9 @@ canvas {
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 12px;
   overflow-y: auto;
-  transform: translateY(18px) scale(0.985);
-  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transform: translateY(0) scale(1);
+  transition: transform 0.28s ease;
+  will-change: transform;
 }
 
 .planet-overview.is-open .planet-overview-panel {
@@ -1080,13 +1143,15 @@ canvas {
   justify-content: space-between;
   align-items: center;
   gap: 18px;
+  position: relative;
+  z-index: 3;
 }
 
 .planet-overview-close,
 .planet-overview-endpoint {
   min-width: 156px;
   min-height: 48px;
-  border-radius: 999px;
+  border-radius: 8px;
   font-size: 0.92rem;
 }
 
@@ -1102,12 +1167,14 @@ canvas {
 
 .planet-overview-copy {
   text-align: center;
+  position: relative;
+  z-index: 3;
 }
 
 .planet-overview-title {
   font-size: clamp(3.1rem, 6vw, 5.3rem);
-  line-height: 0.96;
-  letter-spacing: 0.02em;
+  line-height: 1.12;
+  letter-spacing: 0;
   color: #f5f8ff;
   font-family: "Legend", "Gunken", Arial, sans-serif;
 }
@@ -1123,7 +1190,11 @@ canvas {
 
 .planet-overview-stat {
   align-self: center;
-  max-width: 340px;
+  max-width: 390px;
+  min-width: 0;
+  padding: 2px 0;
+  position: relative;
+  z-index: 3;
 }
 
 .planet-overview-label {
@@ -1131,7 +1202,7 @@ canvas {
   margin-bottom: 6px;
   color: #9fc8ff;
   text-transform: uppercase;
-  letter-spacing: 0.16em;
+  letter-spacing: 0;
   font-size: clamp(0.84rem, 1vw, 0.98rem);
 }
 
@@ -1139,19 +1210,20 @@ canvas {
   display: block;
   color: #dfebff;
   font-size: clamp(1.05rem, 1.5vw, 1.35rem);
-  line-height: 1.38;
+  line-height: 1.6;
   font-weight: 700;
-  letter-spacing: 0.035em;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 
 .planet-overview-stat-size {
-  grid-column: 3 / span 3;
+  grid-column: 2 / span 4;
   grid-row: 2 / span 1;
   align-self: start;
 }
 
 .planet-overview-stat-temp {
-  grid-column: 10 / span 3;
+  grid-column: 9 / span 4;
   grid-row: 4 / span 1;
   justify-self: start;
   text-align: left;
@@ -1159,13 +1231,13 @@ canvas {
 }
 
 .planet-overview-stat-distance {
-  grid-column: 2 / span 4;
+  grid-column: 1 / span 5;
   grid-row: 4 / span 1;
   align-self: start;
 }
 
 .planet-overview-stat-elements {
-  grid-column: 9 / span 4;
+  grid-column: 8 / span 5;
   grid-row: 2 / span 2;
   justify-self: start;
   align-self: start;
@@ -1180,6 +1252,12 @@ canvas {
   min-height: 260px;
   min-height: 220px;
   padding-top: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.planet-overview.is-open .planet-overview-visual {
+  animation: planetOverviewZoomIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 .planet-overview-visual img {
@@ -1190,22 +1268,28 @@ canvas {
   object-fit: contain;
   object-position: center;
   filter: drop-shadow(0 28px 42px rgba(0, 0, 0, 0.42));
-  animation: planetOverviewImageIn 0.28s ease, planetOverviewFloat 4.9s ease-in-out infinite 0.28s;
+  transform: translateY(-18px);
+  animation: planetOverviewFloat 4.9s ease-in-out infinite;
 }
 
 .planet-overview-visual img.is-saturn {
   width: min(31vw, 470px);
 }
 
-@keyframes planetOverviewImageIn {
+@keyframes planetOverviewZoomIn {
   from {
     opacity: 0;
-    transform: translateY(-20px) scale(0.92);
+    transform: scale(0.35);
+  }
+
+  65% {
+    opacity: 1;
+    transform: scale(1.08);
   }
 
   to {
     opacity: 1;
-    transform: translateY(-20px) scale(1);
+    transform: scale(1);
   }
 }
 
@@ -1246,10 +1330,13 @@ canvas {
   }
 
   .mission-control-page .mission-shell {
-    padding: 28px 18px 0;
+    padding: 0 18px;
   }
 
   .mission-topbar {
+    top: 28px;
+    left: 18px;
+    right: 18px;
     flex-direction: column;
     align-items: flex-start;
   }
@@ -1269,6 +1356,21 @@ canvas {
     align-items: stretch;
   }
 
+  .mission-topbar > .sim-time-chip,
+  .mission-topbar > .planner-preview {
+    width: 100%;
+    flex-basis: 100%;
+  }
+
+  .mission-topbar > .sim-time-chip {
+    position: static;
+    transform: none;
+  }
+
+  .mission-topbar > .planner-preview {
+    position: static;
+  }
+
   .mission-layout {
     margin: 0 -18px;
   }
@@ -1277,14 +1379,15 @@ canvas {
     min-height: 70vh;
   }
 
-  .mission-telemetry {
-    top: 16px;
+  .asteroid-monitor {
+    top: auto;
+    bottom: 72px;
     right: 18px;
     left: 18px;
     width: auto;
   }
 
-  .mission-telemetry-grid {
+  .asteroid-monitor-grid {
     grid-template-columns: 1fr;
   }
 
