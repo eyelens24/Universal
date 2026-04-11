@@ -527,6 +527,13 @@ canvas {
   letter-spacing: 0.02em;
 }
 
+.mission-brand-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  order: 0;
+}
+
 .mission-topbar {
   --nav-button-width: 152px;
   --nav-button-height: 40px;
@@ -544,6 +551,7 @@ canvas {
   flex-wrap: nowrap;
   justify-content: flex-end;
   gap: 10px;
+  order: 2;
   flex-shrink: 0;
 }
 
@@ -559,22 +567,31 @@ canvas {
   white-space: nowrap;
 }
 
-.control-menu-btn {
+.mission-topbar .control-menu-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  background: transparent;
-  color: #f5f7fb;
-  border: 1px solid rgba(245, 247, 251, 0.38);
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  margin-top: -3px;
+  padding: 0 !important;
+  background: transparent !important;
+  color: #f5f7fb !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  transform: none;
+  cursor: pointer;
+  font-size: 0;
+  line-height: 0;
 }
 
 .menu-icon,
 .menu-icon::before,
 .menu-icon::after {
   display: block;
-  width: 18px;
-  height: 2px;
+  width: 26px;
+  height: 3px;
   border-radius: 999px;
   background: currentColor;
 }
@@ -591,11 +608,22 @@ canvas {
 }
 
 .menu-icon::before {
-  top: -6px;
+  top: -8px;
 }
 
 .menu-icon::after {
-  top: 6px;
+  top: 8px;
+}
+
+.mission-topbar .control-menu-btn:hover,
+.mission-topbar .control-menu-btn:active {
+  background: transparent !important;
+  opacity: 0.82;
+}
+
+.mission-topbar .control-menu-btn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.72);
+  outline-offset: 4px;
 }
 
 .mission-control-page .mission-controls {

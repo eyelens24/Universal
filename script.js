@@ -78,6 +78,12 @@ const G0 = 9.80665;
 const DAY_MS = 86400000;
 const DAY_SECONDS = 86400;
 const SUN_GM = spice.getBodyInfo("SUN").GM;
+const CREW_DOSE_LIMIT_30_DAY_MSV = 250;
+const CREW_DOSE_LIMIT_YEAR_MSV = 500;
+const CREW_DOSE_LIMIT_CAREER_MSV = 600;
+const DEEP_SPACE_GCR_MSV_PER_DAY = 1.8;
+const NOMINAL_SOLAR_PARTICLE_MSV_PER_DAY_AT_1_AU = 0.08;
+const PEAK_DOSE_RATE_LIMIT_MSV_PER_DAY = 25;
 
 const planetNames = [
   "MERCURY",
@@ -269,6 +275,18 @@ function formatFuel(value) {
 
 function formatAu(value) {
   return `${formatNumber(value, 3)} AU`;
+}
+
+function formatDose(value) {
+  return `${formatNumber(value, 1)} mSv`;
+}
+
+function formatDoseRate(value) {
+  return `${formatNumber(value, 2)} mSv/day`;
+}
+
+function formatRiskLevel(value) {
+  return value;
 }
 
 function canvasToScreen(position, viewState) {
@@ -580,37 +598,82 @@ function estimateHazardAlongRoute(startPosition, endPosition) {
 }
 
 function estimateRadiationAlongRoute(startPosition, endPosition, travelDays) {
-  const samples = 36;
-  let totalExposure = 0;
-  let peakExposure = 0;
+  const samples = 72;
+  let totalDoseRateMsvPerDay = 0;
+  let peakDoseRateMsvPerDay = 0;
   let closestRadiusAu = Number.POSITIVE_INFINITY;
+  const missionDoseLimitMsv = getCrewMissionDoseLimitMsv(travelDays);
 
   for (let i = 0; i <= samples; i += 1) {
     const t = i / samples;
     const sample = startPosition.add(endPosition.sub(startPosition).scale(t));
-    const radiusAu = Math.max(0.2, sample.norm() / AU_KM);
+    const radiusAu = Math.max(0.05, sample.norm() / AU_KM);
     closestRadiusAu = Math.min(closestRadiusAu, radiusAu);
 
-    let exposure = 1 / (radiusAu * radiusAu);
-    if (radiusAu < 0.85) {
-      exposure += ((0.85 - radiusAu) / 0.85) * 2.4;
-    }
-    if (radiusAu > 4.8 && radiusAu < 6.2) {
-      exposure += 1.1;
-    }
-
-    totalExposure += exposure;
-    peakExposure = Math.max(peakExposure, exposure);
+    const doseRateMsvPerDay = estimateCrewDoseRateMsvPerDay(radiusAu);
+    totalDoseRateMsvPerDay += doseRateMsvPerDay;
+    peakDoseRateMsvPerDay = Math.max(peakDoseRateMsvPerDay, doseRateMsvPerDay);
   }
 
-  const averageExposure = totalExposure / (samples + 1);
-  const missionExposure = averageExposure * Math.max(1, travelDays / 30);
+  const averageDoseRateMsvPerDay = totalDoseRateMsvPerDay / (samples + 1);
+  const totalDoseMsv = averageDoseRateMsvPerDay * Math.max(0.1, travelDays);
+  const doseLimitRatio = totalDoseMsv / missionDoseLimitMsv;
+  const peakLimitRatio = peakDoseRateMsvPerDay / PEAK_DOSE_RATE_LIMIT_MSV_PER_DAY;
+  const crewRiskLevel = getCrewRadiationRiskLevel(doseLimitRatio, peakLimitRatio, closestRadiusAu);
+  const score = totalDoseMsv +
+    Math.max(0, doseLimitRatio - 1) * missionDoseLimitMsv * 4 +
+    Math.max(0, peakLimitRatio - 1) * PEAK_DOSE_RATE_LIMIT_MSV_PER_DAY * 30;
 
   return {
-    score: missionExposure,
-    peakExposure,
+    score,
+    totalDoseMsv,
+    averageDoseRateMsvPerDay,
+    peakDoseRateMsvPerDay,
+    missionDoseLimitMsv,
+    doseLimitRatio,
+    peakLimitRatio,
+    crewRiskLevel,
     closestRadiusAu
   };
+}
+
+function getCrewMissionDoseLimitMsv(travelDays) {
+  if (travelDays <= 30) {
+    return CREW_DOSE_LIMIT_30_DAY_MSV;
+  }
+
+  const annualizedLimit = CREW_DOSE_LIMIT_YEAR_MSV * (travelDays / 365);
+  return clamp(annualizedLimit, CREW_DOSE_LIMIT_30_DAY_MSV, CREW_DOSE_LIMIT_CAREER_MSV);
+}
+
+function estimateCrewDoseRateMsvPerDay(radiusAu) {
+  const solarParticleDose = NOMINAL_SOLAR_PARTICLE_MSV_PER_DAY_AT_1_AU / (radiusAu * radiusAu);
+  const solarEventRiskDose = radiusAu < 0.9
+    ? 2.5 * Math.pow(0.9 / radiusAu, 4)
+    : 0;
+  const innerSolarHazardDose = radiusAu < 0.35
+    ? 18 * Math.pow(0.35 / radiusAu, 6)
+    : 0;
+  const jupiterTrappedRadiationDose = radiusAu >= 4.8 && radiusAu <= 5.6 ? 3.5 : 0;
+
+  return DEEP_SPACE_GCR_MSV_PER_DAY +
+    solarParticleDose +
+    solarEventRiskDose +
+    innerSolarHazardDose +
+    jupiterTrappedRadiationDose;
+}
+
+function getCrewRadiationRiskLevel(doseLimitRatio, peakLimitRatio, closestRadiusAu) {
+  if (closestRadiusAu < 0.25 || doseLimitRatio >= 1.5 || peakLimitRatio >= 2) {
+    return "Critical";
+  }
+  if (closestRadiusAu < 0.4 || doseLimitRatio >= 1 || peakLimitRatio >= 1) {
+    return "Exceeds crew standard";
+  }
+  if (doseLimitRatio >= 0.75 || peakLimitRatio >= 0.7) {
+    return "Elevated";
+  }
+  return "Within crew standard";
 }
 
 function normalizeAngleRad(angle) {
@@ -674,6 +737,11 @@ function getRouteScore(candidate, metrics, preferences) {
   }
   if (preferences.radiation) {
     score += candidate.radiationScore / Math.max(metrics.maxRadiationScore, 1);
+    score += Math.max(0, (candidate.radiationDoseLimitRatio ?? 0) - 0.75) * 3;
+    score += Math.max(0, (candidate.radiationPeakLimitRatio ?? 0) - 0.7) * 2;
+    if ((candidate.closestSunRadiusAu ?? 1) < 0.4) {
+      score += 6;
+    }
   }
 
   return score;
@@ -764,7 +832,13 @@ function estimateBodyTransferCandidate(originDescriptor, destinationDescriptor, 
     arrivalPositionErrorKm: interceptErrorKm,
     phaseErrorRad,
     radiationScore: radiation.score,
-    peakRadiation: radiation.peakExposure,
+    radiationDoseMsv: radiation.totalDoseMsv,
+    averageRadiationDoseRateMsvPerDay: radiation.averageDoseRateMsvPerDay,
+    peakRadiation: radiation.peakDoseRateMsvPerDay,
+    missionDoseLimitMsv: radiation.missionDoseLimitMsv,
+    radiationDoseLimitRatio: radiation.doseLimitRatio,
+    radiationPeakLimitRatio: radiation.peakLimitRatio,
+    crewRadiationRisk: radiation.crewRiskLevel,
     closestSunRadiusAu: radiation.closestRadiusAu,
     hazardScore: hazard.score,
     hazardHits: hazard.hits
@@ -903,7 +977,13 @@ function estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate
         departureDistanceKm: departureState.position.sub(arrivalState.position).norm(),
         arrivalPositionErrorKm: transferSolution.arrivalPositionErrorKm,
         radiationScore: radiation.score,
-        peakRadiation: radiation.peakExposure,
+        radiationDoseMsv: radiation.totalDoseMsv,
+        averageRadiationDoseRateMsvPerDay: radiation.averageDoseRateMsvPerDay,
+        peakRadiation: radiation.peakDoseRateMsvPerDay,
+        missionDoseLimitMsv: radiation.missionDoseLimitMsv,
+        radiationDoseLimitRatio: radiation.doseLimitRatio,
+        radiationPeakLimitRatio: radiation.peakLimitRatio,
+        crewRadiationRisk: radiation.crewRiskLevel,
         closestSunRadiusAu: radiation.closestRadiusAu,
         hazardScore: hazard.score,
         hazardHits: hazard.hits
@@ -1134,11 +1214,12 @@ function renderRouteStats(plan) {
         { label: "Arrival Match", value: formatDeltaV(plan.arrivalDeltaV) },
         { label: "Total Delta-V", value: formatDeltaV(plan.totalDeltaV) },
         { label: "Fuel Required", value: formatFuel(plan.fuelRequiredKg) },
-        { label: "Radiation Score", value: formatNumber(plan.radiationScore, 2) },
-        { label: "Peak Radiation Spike", value: formatNumber(plan.peakRadiation, 2) },
+        { label: "Crew Radiation Dose", value: formatDose(plan.radiationDoseMsv) },
+        { label: "Peak Dose Rate", value: formatDoseRate(plan.peakRadiation) },
         { label: "Closest Sun Distance", value: formatAu(plan.closestSunRadiusAu) },
         { label: "Fuel Remaining", value: formatFuel(Math.max(0, plan.ship.fuelMassKg - plan.fuelRequiredKg)) },
-        { label: "Intercept Error", value: formatKm(plan.arrivalPositionErrorKm) },
+        { label: "Crew Dose Limit", value: formatDose(plan.missionDoseLimitMsv) },
+        { label: "Crew Radiation Risk", value: formatRiskLevel(plan.crewRadiationRisk) },
         { label: "Hazard Notes", value: plan.hazardHits.join(", ") || "Clear" }
       ]
     : [
@@ -1156,11 +1237,12 @@ function renderRouteStats(plan) {
         "Arrival Match",
         "Total Delta-V",
         "Fuel Required",
-        "Radiation Score",
-        "Peak Radiation Spike",
+        "Crew Radiation Dose",
+        "Peak Dose Rate",
         "Closest Sun Distance",
         "Fuel Remaining",
-        "Intercept Error",
+        "Crew Dose Limit",
+        "Crew Radiation Risk",
         "Hazard Notes"
       ].map((label) => ({ label, value: "Awaiting route" }));
 
@@ -1225,6 +1307,7 @@ function planActiveRoute() {
     `travel for ${formatNumber(plan.travelDays, 1)} days, and ${plan.direction.toLowerCase()}. ` +
     `Estimated total delta-v is ${formatNumber(plan.totalDeltaV, 2)} km/s ` +
     `with ${formatNumber(plan.fuelRequiredKg, 1)} kg of fuel required for the selected route. ` +
+    `Estimated crew radiation dose is ${formatDose(plan.radiationDoseMsv)} against a ${formatDose(plan.missionDoseLimitMsv)} mission limit (${plan.crewRadiationRisk.toLowerCase()}). ` +
     `Minimum fuel to make the trip at all is ${formatNumber(plan.minimumFuelRequiredKg, 1)} kg. ` +
     `Lowest-radiation departure is ${formatShortDate(plan.lowestRadiationDepartureDate)}, and fastest departure is ${formatShortDate(plan.fastestDepartureDate)}. ` +
     `Sun gravity is included in the transfer estimate.`;
@@ -1671,6 +1754,16 @@ zoomResetBtn?.addEventListener("click", () => {
 });
 
 controlMenuBtn?.addEventListener("click", () => {
+  const isOpen = controlMenuBtn.getAttribute("aria-expanded") === "true";
+  setControlMenuOpen(!isOpen);
+});
+
+controlMenuBtn?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") {
+    return;
+  }
+
+  event.preventDefault();
   const isOpen = controlMenuBtn.getAttribute("aria-expanded") === "true";
   setControlMenuOpen(!isOpen);
 });

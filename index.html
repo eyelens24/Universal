@@ -9,9 +9,14 @@
 <body class="mission-control-page">
   <div class="ui mission-shell">
     <div class="mission-topbar">
-      <div class="mission-brand">
-        <h1>UNIVERSAL</h1>
-        <p>Mission Control</p>
+      <div class="mission-brand-row">
+        <div id="controlMenuBtn" class="control-menu-btn" role="button" tabindex="0" aria-label="Control" aria-controls="missionControls" aria-expanded="false">
+          <span class="menu-icon" aria-hidden="true"></span>
+        </div>
+        <div class="mission-brand">
+          <h1>UNIVERSAL</h1>
+          <p>Mission Control</p>
+        </div>
       </div>
 
       <div class="controls mission-controls" id="missionControls" aria-hidden="true">
@@ -43,10 +48,6 @@
       </div>
 
       <div class="mission-actions">
-        <button id="controlMenuBtn" class="control-menu-btn" type="button" aria-controls="missionControls" aria-expanded="false">
-          <span class="menu-icon" aria-hidden="true"></span>
-          <span>Control</span>
-        </button>
         <button id="nowBtn">Use Current Time</button>
         <button id="togglePauseBtn">Pause</button>
       </div>
