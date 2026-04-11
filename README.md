@@ -15,7 +15,7 @@ Some problems with it is that:
 
 Our goal is to improve this system so that it can be used by the people on the spaceship as well and so that there is tracking within the spaceship to make it less troublesome in the case that communication is lost or takes too long when immediate action is needed
 
-##Background Info
+**Background Info**
 
 At its core, SGM is an app that lets the user plan their ship's trajectories and chart the fastest, safest, and most efficient route in terms of its fuel usage. This app seeks to aide the future of space travel, where mission parameters may change. Sometimes, life or death decisions won't wait for a response from back on earth, which may take dasys to arrive. Sometimes astronauths need to make them, without having the time to wait. This is what SGM is trying to fix. 
 
