@@ -1,0 +1,827 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  font-family: Arial, Helvetica, sans-serif;
+  background:
+    radial-gradient(circle at center, #101a2c 0%, #090d16 45%, #04060b 100%);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px;
+}
+
+.ui {
+  width: min(1100px, 95%);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 18px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+h1 {
+  text-align: center;
+  margin-bottom: 16px;
+  font-size: 2rem;
+  letter-spacing: 1px;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+button,
+input[type="datetime-local"],
+input[type="number"],
+select {
+  border: none;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+}
+
+button {
+  background: #ffd166;
+  color: #111;
+  font-weight: bold;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+button:hover {
+  transform: translateY(-2px);
+  opacity: 0.92;
+}
+
+input[type="datetime-local"],
+input[type="number"],
+select {
+  background: rgba(255, 255, 255, 0.92);
+  color: #111;
+}
+
+.time-panel {
+  text-align: center;
+  margin-bottom: 15px;
+  line-height: 1.8;
+  font-size: 1rem;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  font-size: 0.9rem;
+}
+
+.status-panel {
+  margin-top: 14px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.95rem;
+}
+
+.planner-launch {
+  margin-top: 18px;
+  text-align: center;
+}
+
+.planner-launch-copy {
+  margin-top: 10px;
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.planner-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.planner-card,
+.route-output {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.planner-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.planner-card button {
+  margin-top: 4px;
+}
+
+.planner-priority-group {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.planner-priority-group label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+  color: rgba(240, 246, 255, 0.88);
+}
+
+.planner-priority-group input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+.planner-priority-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(182, 215, 255, 0.72);
+}
+
+.custom-coords {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-items: end;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(3, 7, 15, 0.7);
+  backdrop-filter: blur(10px);
+}
+
+.modal-dialog {
+  position: relative;
+  width: min(1100px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  background: linear-gradient(180deg, rgba(13, 21, 35, 0.98), rgba(8, 12, 21, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 22px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+  padding: 24px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.modal-header h2 {
+  margin-bottom: 6px;
+}
+
+.modal-header p {
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.modal-close {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.route-output {
+  margin-top: 16px;
+}
+
+.route-output p {
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.route-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.route-stat {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.route-stat span {
+  display: block;
+}
+
+.route-stat .label {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.65);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.route-stat .value {
+  font-size: 1rem;
+  color: #fff7da;
+}
+
+.asteroid {
+  background: #9a8f80;
+}
+
+.legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.mercury { background: #b7b7b7; }
+.venus { background: #d8b26e; }
+.earth { background: #4da6ff; }
+.mars { background: #d96b4d; }
+.jupiter { background: #d9b38c; }
+.saturn { background: #e7d28d; }
+.uranus { background: #8fe3ff; }
+.neptune { background: #4b70dd; }
+
+.canvas-wrap {
+  width: min(1000px, 95vw);
+  aspect-ratio: 1 / 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+canvas {
+  width: 100%;
+  height: 100%;
+  background:
+    radial-gradient(circle at center, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0.15) 65%, rgba(0,0,0,0.3) 100%);
+  border-radius: 18px;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+@media (max-width: 720px) {
+  .custom-coords {
+    grid-template-columns: 1fr;
+  }
+
+  .modal {
+    padding: 12px;
+  }
+
+  .modal-dialog {
+    padding: 18px;
+  }
+
+  .modal-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.mission-control-page {
+  background:
+    radial-gradient(circle at 50% 72%, rgba(32, 57, 126, 0.38), transparent 38%),
+    linear-gradient(180deg, #041126 0%, #07162c 58%, #030814 100%);
+  align-items: stretch;
+  padding: 0;
+  overflow: hidden;
+}
+
+.mission-control-page .mission-shell {
+  width: 100%;
+  min-height: 100vh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 34px 4vw 0;
+  margin: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.mission-control-page .eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.72rem;
+  color: #8ec5ff;
+  margin-bottom: 8px;
+}
+
+.mission-brand h1 {
+  text-align: left;
+  margin-bottom: 0;
+  font-size: clamp(1.45rem, 2.3vw, 2.05rem);
+  line-height: 0.95;
+  letter-spacing: 0.32em;
+  font-weight: 700;
+}
+
+.mission-brand p {
+  margin-top: 10px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: clamp(1rem, 1.5vw, 1.25rem);
+  letter-spacing: 0.02em;
+}
+
+.mission-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+
+.mission-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.mission-actions button {
+  min-width: 82px;
+  height: 38px;
+  border-radius: 8px;
+  padding: 0 16px;
+  background: #ffd400;
+  color: #030711;
+  font-size: 0.86rem;
+  letter-spacing: 0;
+}
+
+.mission-control-page .mission-controls {
+  display: grid;
+  grid-template-columns: minmax(500px, 1fr) minmax(200px, 0.38fr) minmax(190px, 0.32fr) minmax(190px, 0.32fr);
+  align-items: center;
+  justify-content: stretch;
+  flex: 1 1 auto;
+  gap: 14px;
+  margin-bottom: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+}
+
+.nav-control-card,
+.sim-time-chip,
+.zoom-controls {
+  min-height: 68px;
+  border-radius: 8px;
+  background: #202650;
+  border: 1px solid rgba(95, 117, 205, 0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.nav-time-card {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.7fr) minmax(230px, 1.45fr) minmax(92px, 0.55fr);
+  gap: 16px;
+  align-items: center;
+  padding: 9px 20px;
+}
+
+.control-field {
+  min-width: 0;
+}
+
+.control-field label,
+.card-label {
+  display: block;
+  margin-bottom: 5px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.mission-control-page input[type="number"],
+.mission-control-page input[type="datetime-local"] {
+  width: 100%;
+  height: 36px;
+  border-radius: 8px;
+  padding: 0 9px;
+  background: #f4f4f4;
+  color: #091120;
+  font-size: 0.95rem;
+}
+
+.mission-control-page input[type="number"] {
+  padding-left: 14px;
+}
+
+.nav-time-card button,
+.planner-preview button,
+.zoom-controls button {
+  border-radius: 8px;
+  background: #ffd400;
+  color: #030711;
+}
+
+.nav-time-card button {
+  align-self: center;
+  height: 36px;
+  padding: 0 18px;
+  margin-top: 23px;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.planner-preview {
+  display: grid;
+  align-content: center;
+  gap: 5px;
+  padding: 9px 20px;
+}
+
+.planner-preview button {
+  height: 36px;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.zoom-controls {
+  display: grid;
+  grid-template-columns: 28px minmax(58px, 1fr) 28px;
+  align-items: center;
+  justify-items: center;
+  gap: 4px 8px;
+  padding: 9px 18px 8px;
+  margin-left: 0;
+}
+
+.controls-mini-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(10, 24, 40, 0.7);
+  border: 1px solid rgba(126, 184, 255, 0.12);
+}
+
+.controls-mini-panel h2 {
+  margin: 0;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(182, 215, 255, 0.75);
+  white-space: nowrap;
+}
+
+.planner-preview-inline button {
+  padding: 8px 12px;
+  font-size: 0.86rem;
+}
+
+.legend-inline {
+  max-width: min(540px, 100%);
+}
+
+.sim-time-chip {
+  display: grid;
+  align-content: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px 20px;
+  text-align: center;
+}
+
+.sim-time-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.sim-time-value {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #f3f8ff;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.sim-time-clock {
+  font-size: 1.6rem;
+}
+
+.sim-time-date {
+  display: none;
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 0.84rem;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.zoom-label {
+  grid-column: 1 / -1;
+  width: 100%;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.88);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: center;
+}
+
+.zoom-display {
+  min-width: 58px;
+  text-align: center;
+  color: #eef6ff;
+  font-size: 0.95rem;
+}
+
+.zoom-controls button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  line-height: 1;
+}
+
+.zoom-controls #zoomResetBtn {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: auto;
+  margin-top: 0;
+  padding: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.74rem;
+  font-weight: 400;
+  text-decoration: underline;
+}
+
+.mission-layout {
+  display: block;
+  min-height: 0;
+  margin: 0 -4vw;
+}
+
+.mission-main {
+  min-width: 0;
+  height: 100%;
+}
+
+.mission-control-page .mission-canvas-wrap {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  aspect-ratio: auto;
+  position: relative;
+  flex-direction: column;
+  align-items: stretch;
+  margin-top: 0;
+}
+
+.mission-control-page canvas {
+  display: block;
+  flex: 1;
+  min-height: 0;
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.mission-control-page canvas:active {
+  cursor: grabbing;
+}
+
+.canvas-hint {
+  position: absolute;
+  left: 4vw;
+  right: 4vw;
+  bottom: 18px;
+  z-index: 1;
+  margin-top: 0;
+  color: rgba(213, 233, 255, 0.72);
+  font-size: 0.92rem;
+  pointer-events: none;
+}
+
+.mission-legend {
+  justify-content: flex-start;
+  gap: 10px 16px;
+}
+
+.compact-legend {
+  gap: 6px 10px;
+  font-size: 0.8rem;
+}
+
+.planet-info-card {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.planet-badge {
+  width: 96px;
+  height: 96px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #08111d;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.planet-info-right h3 {
+  margin-bottom: 10px;
+}
+
+.planet-info-right p {
+  line-height: 1.6;
+  color: rgba(239, 245, 255, 0.82);
+}
+
+.planet-info-overlay {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 2;
+  width: min(360px, calc(100% - 36px));
+  padding: 18px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(9, 18, 32, 0.96), rgba(5, 10, 19, 0.96));
+  border: 1px solid rgba(122, 181, 255, 0.16);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+}
+
+.planet-info-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 7px 10px;
+  font-size: 0.82rem;
+  background: rgba(255, 255, 255, 0.1);
+  color: #f4f8ff;
+}
+
+.planet-info-kicker {
+  margin-bottom: 6px;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #8ec5ff;
+}
+
+@media (max-width: 1280px) {
+  .mission-topbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .mission-control-page .mission-controls {
+    order: 3;
+    flex-basis: 100%;
+    justify-content: stretch;
+  }
+}
+
+@media (max-width: 720px) {
+  .mission-control-page {
+    padding: 0;
+    overflow: auto;
+  }
+
+  .mission-control-page .mission-shell {
+    padding: 28px 18px 0;
+  }
+
+  .mission-topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .mission-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .mission-actions button {
+    flex: 1;
+    min-width: 0;
+    padding: 0 14px;
+  }
+
+  .mission-control-page .mission-controls {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .mission-layout {
+    margin: 0 -18px;
+  }
+
+  .mission-control-page .mission-canvas-wrap {
+    min-height: 70vh;
+  }
+
+  .canvas-hint {
+    left: 18px;
+    right: 18px;
+  }
+
+  .nav-time-card {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .nav-time-card button {
+    margin-top: 0;
+  }
+
+  .planner-preview,
+  .zoom-controls,
+  .sim-time-chip {
+    width: 100%;
+  }
+
+  .zoom-controls {
+    min-height: 58px;
+  }
+
+  .controls-mini-panel {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .legend-inline {
+    max-width: 100%;
+  }
+
+  .sim-time-chip {
+    min-width: 0;
+  }
+
+  .planet-info-card {
+    grid-template-columns: 1fr;
+  }
+
+  .planet-info-overlay {
+    top: 12px;
+    left: 12px;
+    width: calc(100% - 24px);
+  }
+}
