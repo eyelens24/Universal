@@ -84,6 +84,7 @@ const CREW_DOSE_LIMIT_CAREER_MSV = 600;
 const DEEP_SPACE_GCR_MSV_PER_DAY = 1.8;
 const NOMINAL_SOLAR_PARTICLE_MSV_PER_DAY_AT_1_AU = 0.08;
 const PEAK_DOSE_RATE_LIMIT_MSV_PER_DAY = 25;
+const MIN_CREW_SAFE_SOLAR_DISTANCE_AU = 0.7;
 
 const planetNames = [
   "MERCURY",
@@ -620,9 +621,11 @@ function estimateRadiationAlongRoute(startPosition, endPosition, travelDays) {
   const doseLimitRatio = totalDoseMsv / missionDoseLimitMsv;
   const peakLimitRatio = peakDoseRateMsvPerDay / PEAK_DOSE_RATE_LIMIT_MSV_PER_DAY;
   const crewRiskLevel = getCrewRadiationRiskLevel(doseLimitRatio, peakLimitRatio, closestRadiusAu);
+  const violatesSolarKeepout = closestRadiusAu < MIN_CREW_SAFE_SOLAR_DISTANCE_AU;
   const score = totalDoseMsv +
     Math.max(0, doseLimitRatio - 1) * missionDoseLimitMsv * 4 +
-    Math.max(0, peakLimitRatio - 1) * PEAK_DOSE_RATE_LIMIT_MSV_PER_DAY * 30;
+    Math.max(0, peakLimitRatio - 1) * PEAK_DOSE_RATE_LIMIT_MSV_PER_DAY * 30 +
+    (violatesSolarKeepout ? 100000 : 0);
 
   return {
     score,
@@ -633,6 +636,7 @@ function estimateRadiationAlongRoute(startPosition, endPosition, travelDays) {
     doseLimitRatio,
     peakLimitRatio,
     crewRiskLevel,
+    violatesSolarKeepout,
     closestRadiusAu
   };
 }
@@ -664,6 +668,9 @@ function estimateCrewDoseRateMsvPerDay(radiusAu) {
 }
 
 function getCrewRadiationRiskLevel(doseLimitRatio, peakLimitRatio, closestRadiusAu) {
+  if (closestRadiusAu < MIN_CREW_SAFE_SOLAR_DISTANCE_AU) {
+    return "Solar keep-out violation";
+  }
   if (closestRadiusAu < 0.25 || doseLimitRatio >= 1.5 || peakLimitRatio >= 2) {
     return "Critical";
   }
@@ -727,6 +734,10 @@ function ensureAtLeastOnePreference(preferences) {
 }
 
 function getRouteScore(candidate, metrics, preferences) {
+  if (candidate.violatesSolarKeepout) {
+    return Number.POSITIVE_INFINITY;
+  }
+
   let score = candidate.phaseErrorRad ?? 0;
 
   if (preferences.time) {
@@ -739,7 +750,7 @@ function getRouteScore(candidate, metrics, preferences) {
     score += candidate.radiationScore / Math.max(metrics.maxRadiationScore, 1);
     score += Math.max(0, (candidate.radiationDoseLimitRatio ?? 0) - 0.75) * 3;
     score += Math.max(0, (candidate.radiationPeakLimitRatio ?? 0) - 0.7) * 2;
-    if ((candidate.closestSunRadiusAu ?? 1) < 0.4) {
+    if ((candidate.closestSunRadiusAu ?? 1) < MIN_CREW_SAFE_SOLAR_DISTANCE_AU) {
       score += 6;
     }
   }
@@ -749,7 +760,7 @@ function getRouteScore(candidate, metrics, preferences) {
 
 function summarizePreferenceText(preferences) {
   const active = [];
-  if (preferences.time) active.push("time");
+  if (preferences.time) active.push("shortest travel time");
   if (preferences.fuel) active.push("fuel");
   if (preferences.radiation) active.push("radiation");
   return active.join(", ");
@@ -839,6 +850,8 @@ function estimateBodyTransferCandidate(originDescriptor, destinationDescriptor, 
     radiationDoseLimitRatio: radiation.doseLimitRatio,
     radiationPeakLimitRatio: radiation.peakLimitRatio,
     crewRadiationRisk: radiation.crewRiskLevel,
+    violatesSolarKeepout: radiation.violatesSolarKeepout,
+    crewSafe: !radiation.violatesSolarKeepout && radiation.doseLimitRatio <= 1 && radiation.peakLimitRatio <= 1,
     closestSunRadiusAu: radiation.closestRadiusAu,
     hazardScore: hazard.score,
     hazardHits: hazard.hits
@@ -984,6 +997,8 @@ function estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate
         radiationDoseLimitRatio: radiation.doseLimitRatio,
         radiationPeakLimitRatio: radiation.peakLimitRatio,
         crewRadiationRisk: radiation.crewRiskLevel,
+        violatesSolarKeepout: radiation.violatesSolarKeepout,
+        crewSafe: !radiation.violatesSolarKeepout && radiation.doseLimitRatio <= 1 && radiation.peakLimitRatio <= 1,
         closestSunRadiusAu: radiation.closestRadiusAu,
         hazardScore: hazard.score,
         hazardHits: hazard.hits
@@ -1006,7 +1021,11 @@ function estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate
     maxRadiationScore: 1
   });
 
-  const feasibleCandidates = validCandidates
+  const crewSafeCandidates = validCandidates
+    .filter((candidate) => candidate.crewSafe);
+  const routePool = crewSafeCandidates.length ? crewSafeCandidates : validCandidates;
+
+  const feasibleCandidates = routePool
     .filter((candidate) => candidate.feasible)
     .sort((a, b) =>
       getRouteScore(a, metrics, preferences) - getRouteScore(b, metrics, preferences) ||
@@ -1018,7 +1037,7 @@ function estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate
       a.hazardScore - b.hazardScore
     );
 
-  const minimumFuelCandidates = [...validCandidates].sort((a, b) =>
+  const minimumFuelCandidates = [...routePool].sort((a, b) =>
     a.fuelRequiredKg - b.fuelRequiredKg ||
     a.arrivalPositionErrorKm - b.arrivalPositionErrorKm ||
     (a.delayDays + a.travelDays) - (b.delayDays + b.travelDays) ||
@@ -1026,19 +1045,19 @@ function estimateRouteBallistic(originDescriptor, destinationDescriptor, simDate
     a.totalDeltaV - b.totalDeltaV
   );
 
-  const fallbackCandidates = [...candidates].sort((a, b) =>
+  const fallbackCandidates = [...(routePool.length ? routePool : candidates)].sort((a, b) =>
     a.arrivalPositionErrorKm - b.arrivalPositionErrorKm ||
     a.fuelRequiredKg - b.fuelRequiredKg ||
     (a.delayDays + a.travelDays) - (b.delayDays + b.travelDays) ||
     a.travelDays - b.travelDays ||
     a.totalDeltaV - b.totalDeltaV
   );
-  const lowestRadiationCandidates = [...validCandidates].sort((a, b) =>
+  const lowestRadiationCandidates = [...routePool].sort((a, b) =>
     a.radiationScore - b.radiationScore ||
     a.peakRadiation - b.peakRadiation ||
     a.travelDays - b.travelDays
   );
-  const fastestCandidates = [...validCandidates].sort((a, b) =>
+  const fastestCandidates = [...routePool].sort((a, b) =>
     a.travelDays - b.travelDays ||
     a.arrivalPositionErrorKm - b.arrivalPositionErrorKm
   );
@@ -1119,26 +1138,30 @@ function estimateRoute(originDescriptor, destinationDescriptor, simDate, ship) {
     maxRadiationScore: 1
   });
 
-  const feasibleCandidates = validCandidates
+  const crewSafeCandidates = validCandidates
+    .filter((candidate) => candidate.crewSafe);
+  const routePool = crewSafeCandidates.length ? crewSafeCandidates : validCandidates;
+
+  const feasibleCandidates = routePool
     .filter((candidate) => candidate.feasible)
     .sort((a, b) =>
       getRouteScore(a, metrics, preferences) - getRouteScore(b, metrics, preferences) ||
       comparePlanCandidates(a, b)
     );
 
-  const minimumFuelCandidates = [...validCandidates].sort((a, b) =>
+  const minimumFuelCandidates = [...routePool].sort((a, b) =>
     a.fuelRequiredKg - b.fuelRequiredKg ||
     a.phaseErrorRad - b.phaseErrorRad ||
     comparePlanCandidates(a, b)
   );
 
-  const fallbackCandidates = [...candidates].sort(comparePlanCandidates);
-  const lowestRadiationCandidates = [...validCandidates].sort((a, b) =>
+  const fallbackCandidates = [...(routePool.length ? routePool : candidates)].sort(comparePlanCandidates);
+  const lowestRadiationCandidates = [...routePool].sort((a, b) =>
     a.radiationScore - b.radiationScore ||
     a.peakRadiation - b.peakRadiation ||
     comparePlanCandidates(a, b)
   );
-  const fastestCandidates = [...validCandidates].sort((a, b) =>
+  const fastestCandidates = [...routePool].sort((a, b) =>
     a.travelDays - b.travelDays ||
     comparePlanCandidates(a, b)
   );
@@ -1205,11 +1228,10 @@ function renderRouteStats(plan) {
         { label: "Selected Priorities", value: summarizePreferenceText(plan.preferences) || "time, fuel, radiation" },
         { label: "Minimum Fuel To Make Trip", value: formatFuel(plan.minimumFuelRequiredKg) },
         { label: "Lowest Fuel Leave Time", value: formatShortDate(plan.minimumFuelDepartureDate) },
-        { label: "Fastest Leave Time", value: formatShortDate(plan.fastestDepartureDate) },
+        { label: "Shortest-Time Departure", value: formatShortDate(plan.fastestDepartureDate) },
+        { label: "Shortest Travel Time", value: formatDays(plan.fastestTravelDays) },
         { label: "Lowest Radiation Leave Time", value: formatShortDate(plan.lowestRadiationDepartureDate) },
-        { label: "Mission Time", value: formatDays(plan.delayDays + plan.travelDays) },
         { label: "Travel Time", value: formatDays(plan.travelDays) },
-        { label: "Departure Delay", value: formatDays(plan.delayDays) },
         { label: "Departure Burn", value: formatDeltaV(plan.departureDeltaV) },
         { label: "Arrival Match", value: formatDeltaV(plan.arrivalDeltaV) },
         { label: "Total Delta-V", value: formatDeltaV(plan.totalDeltaV) },
@@ -1228,11 +1250,10 @@ function renderRouteStats(plan) {
         "Selected Priorities",
         "Minimum Fuel To Make Trip",
         "Lowest Fuel Leave Time",
-        "Fastest Leave Time",
+        "Shortest-Time Departure",
+        "Shortest Travel Time",
         "Lowest Radiation Leave Time",
-        "Mission Time",
         "Travel Time",
-        "Departure Delay",
         "Departure Burn",
         "Arrival Match",
         "Total Delta-V",
@@ -1309,7 +1330,8 @@ function planActiveRoute() {
     `with ${formatNumber(plan.fuelRequiredKg, 1)} kg of fuel required for the selected route. ` +
     `Estimated crew radiation dose is ${formatDose(plan.radiationDoseMsv)} against a ${formatDose(plan.missionDoseLimitMsv)} mission limit (${plan.crewRadiationRisk.toLowerCase()}). ` +
     `Minimum fuel to make the trip at all is ${formatNumber(plan.minimumFuelRequiredKg, 1)} kg. ` +
-    `Lowest-radiation departure is ${formatShortDate(plan.lowestRadiationDepartureDate)}, and fastest departure is ${formatShortDate(plan.fastestDepartureDate)}. ` +
+    `For shortest travel time, depart ${formatShortDate(plan.fastestDepartureDate)} and travel for ${formatDays(plan.fastestTravelDays)}. ` +
+    `Lowest-radiation departure is ${formatShortDate(plan.lowestRadiationDepartureDate)}. ` +
     `Sun gravity is included in the transfer estimate.`;
 
   renderRouteStats(plan);
