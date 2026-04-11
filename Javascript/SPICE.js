@@ -1,28 +1,4 @@
-/**
- * spice-integration.js
- *
- * General SPICE integration layer for Node.js.
- *
- * Purpose:
- * - Load NAIF/JPL SPICE kernels (LSK / PCK / SPK / FK / CK / SCLK if needed)
- * - Query body states, positions, velocities, frame transforms, and body constants
- * - Provide a reusable foundation for gravity, attitude, lighting, comms geometry,
- *   visibility, eclipse logic, and other spacecraft simulation features later
- *
- * IMPORTANT:
- * This file assumes you already built a Node-compatible CSPICE wrapper,
- * such as the WebAssembly Node target described by:
- *   https://github.com/arturania/cspice
- *
- * You need a module like:
- *   ./cspice.node.js
- * that returns an initialized Emscripten/CSPICE instance.
- *
- * You also need SPICE kernels from NAIF, for example:
- * - naif0012.tls or latest leapseconds kernel (LSK)
- * - gm_de440.tpc or pck00011.tpc / pck00010.tpc etc. (PCK/text constants)
- * - de440s.bsp or de440.bsp (planetary SPK)
- */
+
 
 "use strict";
 
