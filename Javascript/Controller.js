@@ -1,21 +1,4 @@
-/*
-  spacecraft-controller.js
-  --------------------------------------------
-  Spacecraft controller for thrust, burns,
-  fuel usage, and autopilot/manual commands.
 
-  Designed to plug into GravitySimulator via:
-    simulator.extraAccelerationFn = (state, bodies) => controller.getAcceleration(state, bodies);
-
-  Units:
-  - distance: km
-  - time: s
-  - velocity: km/s
-  - acceleration: km/s^2
-  - thrust: N
-  - mass: kg
-  - Isp: s
-*/
 
 const G0 = 9.80665; // m/s^2
 
@@ -292,9 +275,9 @@ class SpacecraftController {
   }
 }
 
-/* -----------------------------------------
+/* 
    Useful direction helpers
------------------------------------------ */
+*/
 
 function unitVectorFromVelocity(state) {
   const speed = state.velocity.magnitude();
