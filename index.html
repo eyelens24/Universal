@@ -9,51 +9,46 @@
 <body class="mission-control-page">
   <div class="ui mission-shell">
     <div class="mission-topbar">
-      <div>
-        <p class="eyebrow">Universal Navigation Suite</p>
-        <h1>Mission Control</h1>
+      <div class="mission-brand">
+        <h1>UNIVERSAL</h1>
+        <p>Mission Control</p>
       </div>
-      <div class="mission-actions">
-        <button id="nowBtn">Use Current Time</button>
-        <button id="togglePauseBtn">Pause</button>
-        <button id="openPlannerBtn" type="button">Open Trajectory Planner</button>
-      </div>
-    </div>
 
-    <div class="controls mission-controls">
-      <label for="speedInput">Speed (×):</label>
-      <input id="speedInput" type="number" min="0.01" step="0.01" value="1" />
-      <label for="customTime">Mission time:</label>
-      <input type="datetime-local" id="customTime" step="1" />
-      <button id="applyTimeBtn">Apply Time</button>
-      <div class="controls-mini-panel planner-preview planner-preview-inline">
-        <h2>Trajectory Tools</h2>
-        <button id="openPlannerBtnSecondary" type="button">Plan Route</button>
-      </div>
-      <div class="controls-mini-panel legend-inline">
-        <h2>Legend</h2>
-        <div class="legend mission-legend compact-legend">
-          <span><span class="dot mercury"></span>Mercury</span>
-          <span><span class="dot venus"></span>Venus</span>
-          <span><span class="dot earth"></span>Earth</span>
-          <span><span class="dot mars"></span>Mars</span>
-          <span><span class="dot asteroid"></span>Asteroids</span>
-          <span><span class="dot jupiter"></span>Jupiter</span>
-          <span><span class="dot saturn"></span>Saturn</span>
-          <span><span class="dot uranus"></span>Uranus</span>
-          <span><span class="dot neptune"></span>Neptune</span>
+      <div class="controls mission-controls" id="missionControls" aria-hidden="true">
+        <div class="nav-control-card nav-time-card">
+          <div class="control-field speed-field">
+            <label for="speedInput">Speed</label>
+            <input id="speedInput" type="number" min="0.01" step="0.01" value="1" />
+          </div>
+          <div class="control-field mission-time-field">
+            <label for="customTime">Mission Time</label>
+            <input type="datetime-local" id="customTime" step="1" />
+          </div>
+          <button id="applyTimeBtn">Apply</button>
+        </div>
+        <div class="sim-time-chip">
+          <span class="sim-time-label">Simulation Time</span>
+          <span id="simTimeDisplay" class="sim-time-value">Loading...</span>
+        </div>
+        <div class="nav-control-card planner-preview">
+          <span class="card-label">Trajectory Tools</span>
+          <button id="openPlannerBtn" type="button">Plan Route</button>
+        </div>
+        <div class="zoom-controls">
+          <span class="zoom-label">Zoom</span>
+          <button id="zoomOutBtn" type="button">-</button>
+          <span id="zoomDisplay" class="zoom-display">1.00×</span>
+          <button id="zoomInBtn" type="button">+</button>
         </div>
       </div>
-      <div class="sim-time-chip">
-        <span class="sim-time-label">Simulation Time</span>
-        <span id="simTimeDisplay" class="sim-time-value">Loading...</span>
-      </div>
-      <div class="zoom-controls">
-        <span class="zoom-label">Zoom</span>
-        <button id="zoomOutBtn" type="button">-</button>
-        <span id="zoomDisplay" class="zoom-display">1.00×</span>
-        <button id="zoomInBtn" type="button">+</button>
-        <button id="zoomResetBtn" type="button">Reset</button>
+
+      <div class="mission-actions">
+        <button id="controlMenuBtn" class="control-menu-btn" type="button" aria-controls="missionControls" aria-expanded="false">
+          <span class="menu-icon" aria-hidden="true"></span>
+          <span>Control</span>
+        </button>
+        <button id="nowBtn">Use Current Time</button>
+        <button id="togglePauseBtn">Pause</button>
       </div>
     </div>
 
@@ -99,26 +94,30 @@
       </div>
 
       <div class="planner-grid">
-        <div class="planner-card">
+        <div class="planner-card origin-card">
           <h3>Origin</h3>
-          <label for="originMode">Plot from</label>
-          <select id="originMode">
-            <option value="body">Planet</option>
-            <option value="custom">Custom coordinates</option>
-          </select>
+          <div class="planner-field-grid two-fields">
+            <div class="planner-field">
+              <label for="originMode">Plot from</label>
+              <select id="originMode">
+                <option value="body">Planet</option>
+                <option value="custom">Custom coordinates</option>
+              </select>
+            </div>
 
-          <div id="originBodyGroup">
-            <label for="originBody">Body</label>
-            <select id="originBody">
-              <option value="MERCURY">Mercury</option>
-              <option value="VENUS">Venus</option>
-              <option value="EARTH" selected>Earth</option>
-              <option value="MARS">Mars</option>
-              <option value="JUPITER">Jupiter</option>
-              <option value="SATURN">Saturn</option>
-              <option value="URANUS">Uranus</option>
-              <option value="NEPTUNE">Neptune</option>
-            </select>
+            <div id="originBodyGroup" class="planner-field">
+              <label for="originBody">Body</label>
+              <select id="originBody">
+                <option value="MERCURY">Mercury</option>
+                <option value="VENUS">Venus</option>
+                <option value="EARTH" selected>Earth</option>
+                <option value="MARS">Mars</option>
+                <option value="JUPITER">Jupiter</option>
+                <option value="SATURN">Saturn</option>
+                <option value="URANUS">Uranus</option>
+                <option value="NEPTUNE">Neptune</option>
+              </select>
+            </div>
           </div>
 
           <div id="originCustomGroup" class="custom-coords hidden">
@@ -131,26 +130,30 @@
           </div>
         </div>
 
-        <div class="planner-card">
+        <div class="planner-card destination-card">
           <h3>Destination</h3>
-          <label for="destinationMode">Plot to</label>
-          <select id="destinationMode">
-            <option value="body">Planet</option>
-            <option value="custom">Custom coordinates</option>
-          </select>
+          <div class="planner-field-grid two-fields">
+            <div class="planner-field">
+              <label for="destinationMode">Plot to</label>
+              <select id="destinationMode">
+                <option value="body">Planet</option>
+                <option value="custom">Custom coordinates</option>
+              </select>
+            </div>
 
-          <div id="destinationBodyGroup">
-            <label for="destinationBody">Body</label>
-            <select id="destinationBody">
-              <option value="MERCURY">Mercury</option>
-              <option value="VENUS">Venus</option>
-              <option value="EARTH">Earth</option>
-              <option value="MARS" selected>Mars</option>
-              <option value="JUPITER">Jupiter</option>
-              <option value="SATURN">Saturn</option>
-              <option value="URANUS">Uranus</option>
-              <option value="NEPTUNE">Neptune</option>
-            </select>
+            <div id="destinationBodyGroup" class="planner-field">
+              <label for="destinationBody">Body</label>
+              <select id="destinationBody">
+                <option value="MERCURY">Mercury</option>
+                <option value="VENUS">Venus</option>
+                <option value="EARTH">Earth</option>
+                <option value="MARS" selected>Mars</option>
+                <option value="JUPITER">Jupiter</option>
+                <option value="SATURN">Saturn</option>
+                <option value="URANUS">Uranus</option>
+                <option value="NEPTUNE">Neptune</option>
+              </select>
+            </div>
           </div>
 
           <div id="destinationCustomGroup" class="custom-coords hidden">
@@ -163,22 +166,34 @@
           </div>
         </div>
 
-        <div class="planner-card">
+        <div class="planner-card ship-card">
           <h3>Ship + Mission</h3>
-          <label for="dryMassInput">Dry mass (kg)</label>
-          <input id="dryMassInput" type="number" min="1" step="10" value="1000" />
-          <label for="fuelMassInput">Fuel mass (kg)</label>
-          <input id="fuelMassInput" type="number" min="0" step="10" value="300" />
-          <label for="ispInput">Engine Isp (s)</label>
-          <input id="ispInput" type="number" min="1" step="1" value="340" />
-          <div class="planner-priority-group">
-            <span class="planner-priority-label">Optimize for</span>
-            <label><input id="preferTimeInput" type="checkbox" checked /> Least time</label>
-            <label><input id="preferFuelInput" type="checkbox" checked /> Lowest fuel</label>
-            <label><input id="preferRadiationInput" type="checkbox" checked /> Lowest radiation</label>
+          <div class="planner-field-grid three-fields">
+            <div class="planner-field">
+              <label for="dryMassInput">Dry Mass (kg)</label>
+              <input id="dryMassInput" type="number" min="1" step="10" value="1000" />
+            </div>
+            <div class="planner-field">
+              <label for="fuelMassInput">Fuel Mass (kg)</label>
+              <input id="fuelMassInput" type="number" min="0" step="10" value="300" />
+            </div>
+            <div class="planner-field">
+              <label for="ispInput">Engine Isp (s)</label>
+              <input id="ispInput" type="number" min="1" step="1" value="340" />
+            </div>
           </div>
-          <button id="swapRouteBtn" type="button">Swap Route</button>
-          <button id="planRouteBtn" type="button">Plan Best Route</button>
+          <div class="ship-action-grid">
+            <div class="planner-priority-group">
+              <span class="planner-priority-label">Optimize for</span>
+              <label><input id="preferTimeInput" type="checkbox" checked /> Least time</label>
+              <label><input id="preferFuelInput" type="checkbox" checked /> Lowest fuel</label>
+              <label><input id="preferRadiationInput" type="checkbox" checked /> Lowest radiation</label>
+            </div>
+            <div class="planner-buttons">
+              <button id="swapRouteBtn" type="button">Swap Route</button>
+              <button id="planRouteBtn" type="button">Plan Best Route</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -203,10 +218,5 @@
   </script>
   <script src="spice-browser.js"></script>
   <script src="script.js"></script>
-  <script>
-    document.getElementById("openPlannerBtnSecondary")?.addEventListener("click", function () {
-      document.getElementById("openPlannerBtn")?.click();
-    });
-  </script>
 </body>
 </html>

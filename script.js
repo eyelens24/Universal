@@ -10,6 +10,8 @@ if (!ctx) {
 }
 
 const simTimeDisplay = document.getElementById("simTimeDisplay");
+const controlMenuBtn = document.getElementById("controlMenuBtn");
+const missionControls = document.getElementById("missionControls");
 const nowBtn = document.getElementById("nowBtn");
 const togglePauseBtn = document.getElementById("togglePauseBtn");
 const applyTimeBtn = document.getElementById("applyTimeBtn");
@@ -190,11 +192,10 @@ function createStarField(width, height) {
 
 function resizeCanvas() {
   const rect = canvas.getBoundingClientRect();
-  const size = Math.min(rect.width, rect.height);
   const dpr = window.devicePixelRatio || 1;
 
-  canvas.width = size * dpr;
-  canvas.height = size * dpr;
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.scale(dpr, dpr);
@@ -1117,33 +1118,56 @@ function departureBurnLabel(originVelocity, transitVelocity) {
 }
 
 function renderRouteStats(plan) {
-  const stats = [
-    { label: "Best Time To Leave", value: formatShortDate(plan.departureDate) },
-    { label: "Destination Arrival", value: formatShortDate(plan.arrivalDate) },
-    { label: "Selected Priorities", value: summarizePreferenceText(plan.preferences) || "time, fuel, radiation" },
-    { label: "Minimum Fuel To Make Trip", value: formatFuel(plan.minimumFuelRequiredKg) },
-    { label: "Lowest Fuel Leave Time", value: formatShortDate(plan.minimumFuelDepartureDate) },
-    { label: "Fastest Leave Time", value: formatShortDate(plan.fastestDepartureDate) },
-    { label: "Lowest Radiation Leave Time", value: formatShortDate(plan.lowestRadiationDepartureDate) },
-    { label: "Mission Time", value: formatDays(plan.delayDays + plan.travelDays) },
-    { label: "Travel Time", value: formatDays(plan.travelDays) },
-    { label: "Departure Delay", value: formatDays(plan.delayDays) },
-    { label: "Departure Burn", value: formatDeltaV(plan.departureDeltaV) },
-    { label: "Arrival Match", value: formatDeltaV(plan.arrivalDeltaV) },
-    { label: "Total Delta-V", value: formatDeltaV(plan.totalDeltaV) },
-    { label: "Fuel Required For Current Fastest Route", value: formatFuel(plan.fuelRequiredKg) },
-    { label: "Radiation Score", value: formatNumber(plan.radiationScore, 2) },
-    { label: "Peak Radiation Spike", value: formatNumber(plan.peakRadiation, 2) },
-    { label: "Closest Sun Distance", value: formatAu(plan.closestSunRadiusAu) },
-    { label: "Fuel Remaining", value: formatFuel(Math.max(0, plan.ship.fuelMassKg - plan.fuelRequiredKg)) },
-    { label: "Intercept Error", value: formatKm(plan.arrivalPositionErrorKm) },
-    { label: "Hazard Notes", value: plan.hazardHits.join(", ") || "Clear" }
-  ];
+  const stats = plan
+    ? [
+        { label: "Best Time To Leave", value: formatShortDate(plan.departureDate) },
+        { label: "Destination Arrival", value: formatShortDate(plan.arrivalDate) },
+        { label: "Selected Priorities", value: summarizePreferenceText(plan.preferences) || "time, fuel, radiation" },
+        { label: "Minimum Fuel To Make Trip", value: formatFuel(plan.minimumFuelRequiredKg) },
+        { label: "Lowest Fuel Leave Time", value: formatShortDate(plan.minimumFuelDepartureDate) },
+        { label: "Fastest Leave Time", value: formatShortDate(plan.fastestDepartureDate) },
+        { label: "Lowest Radiation Leave Time", value: formatShortDate(plan.lowestRadiationDepartureDate) },
+        { label: "Mission Time", value: formatDays(plan.delayDays + plan.travelDays) },
+        { label: "Travel Time", value: formatDays(plan.travelDays) },
+        { label: "Departure Delay", value: formatDays(plan.delayDays) },
+        { label: "Departure Burn", value: formatDeltaV(plan.departureDeltaV) },
+        { label: "Arrival Match", value: formatDeltaV(plan.arrivalDeltaV) },
+        { label: "Total Delta-V", value: formatDeltaV(plan.totalDeltaV) },
+        { label: "Fuel Required", value: formatFuel(plan.fuelRequiredKg) },
+        { label: "Radiation Score", value: formatNumber(plan.radiationScore, 2) },
+        { label: "Peak Radiation Spike", value: formatNumber(plan.peakRadiation, 2) },
+        { label: "Closest Sun Distance", value: formatAu(plan.closestSunRadiusAu) },
+        { label: "Fuel Remaining", value: formatFuel(Math.max(0, plan.ship.fuelMassKg - plan.fuelRequiredKg)) },
+        { label: "Intercept Error", value: formatKm(plan.arrivalPositionErrorKm) },
+        { label: "Hazard Notes", value: plan.hazardHits.join(", ") || "Clear" }
+      ]
+    : [
+        "Best Time To Leave",
+        "Destination Arrival",
+        "Selected Priorities",
+        "Minimum Fuel To Make Trip",
+        "Lowest Fuel Leave Time",
+        "Fastest Leave Time",
+        "Lowest Radiation Leave Time",
+        "Mission Time",
+        "Travel Time",
+        "Departure Delay",
+        "Departure Burn",
+        "Arrival Match",
+        "Total Delta-V",
+        "Fuel Required",
+        "Radiation Score",
+        "Peak Radiation Spike",
+        "Closest Sun Distance",
+        "Fuel Remaining",
+        "Intercept Error",
+        "Hazard Notes"
+      ].map((label) => ({ label, value: "Awaiting route" }));
 
   routeStats.innerHTML = stats
     .map(
       (stat) => `
-        <div class="route-stat">
+        <div class="route-stat${plan ? "" : " empty"}">
           <span class="label">${stat.label}</span>
           <span class="value">${stat.value}</span>
         </div>
@@ -1222,7 +1246,7 @@ function tryPlanActiveRoute(statusText) {
     return true;
   } catch (error) {
     routeSummary.textContent = error.message;
-    routeStats.innerHTML = "";
+    renderRouteStats();
     setStatus(error.message);
     return false;
   }
@@ -1243,6 +1267,7 @@ function queueRoutePlan(options = {}) {
   if (pendingSummary) {
     routeSummary.textContent = pendingSummary;
   }
+  renderRouteStats();
 
   requestAnimationFrame(() => {
     setTimeout(() => {
@@ -1500,7 +1525,26 @@ function drawSolarSystem(simDate) {
 }
 
 function updateUI(simDate) {
-  simTimeDisplay.textContent = simDate.toLocaleString();
+  if (!simTimeDisplay.dataset.enhanced) {
+    simTimeDisplay.textContent = "";
+    const clockLine = document.createElement("span");
+    const dateLine = document.createElement("span");
+    clockLine.className = "sim-time-clock";
+    dateLine.className = "sim-time-date";
+    simTimeDisplay.append(clockLine, dateLine);
+    simTimeDisplay.dataset.enhanced = "true";
+  }
+
+  simTimeDisplay.querySelector(".sim-time-clock").textContent = simDate.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+  simTimeDisplay.querySelector(".sim-time-date").textContent = simDate.toLocaleDateString([], {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric"
+  });
 
   if (selectedPlanetName) {
     showPlanetInfo(selectedPlanetName, simDate);
@@ -1533,6 +1577,14 @@ function syncModeVisibility() {
   originCustomGroup.classList.toggle("hidden", originMode.value !== "custom");
   destinationBodyGroup.classList.toggle("hidden", destinationMode.value !== "body");
   destinationCustomGroup.classList.toggle("hidden", destinationMode.value !== "custom");
+}
+
+function setControlMenuOpen(isOpen) {
+  controlMenuBtn?.setAttribute("aria-expanded", String(isOpen));
+  missionControls?.setAttribute("aria-hidden", String(!isOpen));
+  missionControls?.querySelectorAll("button, input, select").forEach((control) => {
+    control.tabIndex = isOpen ? 0 : -1;
+  });
 }
 
 function swapRouteSelections() {
@@ -1612,10 +1664,15 @@ zoomOutBtn.addEventListener("click", () => {
   setZoomAtPoint(zoomLevel / 1.2);
 });
 
-zoomResetBtn.addEventListener("click", () => {
+zoomResetBtn?.addEventListener("click", () => {
   cameraOffsetX = 0;
   cameraOffsetY = 0;
   setZoomAtPoint(1);
+});
+
+controlMenuBtn?.addEventListener("click", () => {
+  const isOpen = controlMenuBtn.getAttribute("aria-expanded") === "true";
+  setControlMenuOpen(!isOpen);
 });
 
 openPlannerBtn.addEventListener("click", () => {
@@ -1795,6 +1852,7 @@ function initializeApp() {
   }
   createAsteroids();
   syncModeVisibility();
+  setControlMenuOpen(false);
   setPlannerOpen(false);
   updateZoomDisplay();
   resizeCanvas();
@@ -1811,7 +1869,7 @@ try {
 } catch (error) {
   simTimeDisplay.textContent = "Startup error";
   routeSummary.textContent = error.message;
-  routeStats.innerHTML = "";
+  renderRouteStats();
   setStatus(error.message);
   throw error;
 }
