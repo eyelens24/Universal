@@ -57,6 +57,39 @@
       <section class="mission-main">
         <div class="canvas-wrap mission-canvas-wrap">
           <canvas id="solarCanvas" width="1000" height="1000"></canvas>
+          <aside class="mission-telemetry" aria-live="polite">
+            <div class="mission-telemetry-header">
+              <span class="mission-telemetry-eyebrow">Live Telemetry</span>
+              <strong id="missionStatusValue" class="mission-status-value">Monitoring route safety</strong>
+            </div>
+            <div class="mission-telemetry-grid">
+              <div class="mission-telemetry-stat">
+                <span class="mission-telemetry-label">Closest Body</span>
+                <span id="telemetryClosestBody" class="mission-telemetry-value">Awaiting target</span>
+              </div>
+              <div class="mission-telemetry-stat">
+                <span class="mission-telemetry-label">Altitude</span>
+                <span id="telemetryAltitude" class="mission-telemetry-value">Awaiting target</span>
+              </div>
+              <div class="mission-telemetry-stat">
+                <span class="mission-telemetry-label">Relative Speed</span>
+                <span id="telemetryRelativeSpeed" class="mission-telemetry-value">Awaiting target</span>
+              </div>
+              <div class="mission-telemetry-stat">
+                <span class="mission-telemetry-label">Dominant Gravity</span>
+                <span id="telemetryDominantGravity" class="mission-telemetry-value">Awaiting target</span>
+              </div>
+              <div class="mission-telemetry-stat">
+                <span class="mission-telemetry-label">Solar Distance</span>
+                <span id="telemetrySolarDistance" class="mission-telemetry-value">Awaiting target</span>
+              </div>
+              <div class="mission-telemetry-stat">
+                <span class="mission-telemetry-label">Ship Speed</span>
+                <span id="telemetryShipSpeed" class="mission-telemetry-value">Awaiting target</span>
+              </div>
+            </div>
+            <p id="missionAlertText" class="mission-alert-text">Telemetry will update once the mission state is resolved.</p>
+          </aside>
           <section id="planetInfo" class="planet-overview hidden" aria-hidden="true" aria-live="polite">
             <div class="planet-overview-surface"></div>
             <div class="planet-overview-panel">
@@ -206,7 +239,6 @@
               <span class="planner-priority-label">Optimize for</span>
               <label><input id="preferTimeInput" type="checkbox" checked /> Shortest travel time</label>
               <label><input id="preferFuelInput" type="checkbox" checked /> Lowest fuel</label>
-              <label><input id="preferRadiationInput" type="checkbox" checked /> Lowest radiation</label>
             </div>
             <div class="planner-buttons">
               <button id="swapRouteBtn" type="button">Swap Route</button>
@@ -218,6 +250,18 @@
 
       <div class="route-output">
         <h3>Guidance</h3>
+        <div class="route-timeline" id="routeTimeline" aria-live="polite">
+          <div class="route-timeline-card">
+            <span class="route-timeline-label">Departure Timer</span>
+            <strong id="departureTimerValue" class="route-timeline-value">Waiting for route</strong>
+            <span id="departureTimerMeta" class="route-timeline-meta">Generate a route to see the best departure window.</span>
+          </div>
+          <div class="route-timeline-card">
+            <span class="route-timeline-label">Arrival Timer</span>
+            <strong id="arrivalTimerValue" class="route-timeline-value">Waiting for route</strong>
+            <span id="arrivalTimerMeta" class="route-timeline-meta">Arrival timing will appear after the planner finishes.</span>
+          </div>
+        </div>
         <p id="routeSummary">Choose an origin and destination, then generate a route.</p>
         <div class="route-stats" id="routeStats"></div>
       </div>
